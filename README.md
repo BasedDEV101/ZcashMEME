@@ -211,11 +211,29 @@ Transactions are built according to ZIP 227:
 
 - `npm start` or `npm run cli` - Start the CLI interface
 - `npm run setup` - Set up the project environment
+- `npm run setup:verification` - Set up GitHub commit verification (SSH signing)
 - `npm run deploy` - Deploy token (when ZSAs are available)
 - `npm test` - Run basic setup tests
 - `npm run test:unit` - Run comprehensive unit tests
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:coverage` - Run tests with coverage report
+
+## GitHub Verification
+
+To make your commits show as "Verified" on GitHub:
+
+1. **Quick Setup (Windows):**
+   ```bash
+   npm run setup:verification
+   ```
+
+2. **Manual Setup:**
+   See `docs/GITHUB_VERIFICATION.md` for detailed instructions on setting up SSH or GPG signing.
+
+3. **After Setup:**
+   - Add your SSH public key to GitHub as a "Signing Key"
+   - All future commits will be automatically signed
+   - Commits will show as "Verified" on GitHub
 
 ## Token Features
 

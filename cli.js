@@ -8,6 +8,8 @@
 import readline from 'readline';
 import { TokenCreator } from './src/token-creator.js';
 import { IssuanceKeys } from './src/keys.js';
+import { WalletManager } from './src/wallet.js';
+import { ZcashBlockchain } from './src/zcash-blockchain.js';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -16,6 +18,8 @@ const rl = readline.createInterface({
 
 const tokenCreator = new TokenCreator();
 const keys = new IssuanceKeys();
+const walletManager = new WalletManager();
+const blockchain = new ZcashBlockchain();
 
 function question(prompt) {
   return new Promise((resolve) => {
@@ -33,7 +37,10 @@ function displayMenu() {
   console.log('6. list-assets     - List all your created assets');
   console.log('7. info            - Get asset information');
   console.log('8. finalize        - Finalize token (prevent further issuance)');
-  console.log('9. exit            - Exit CLI');
+  console.log('9. create-wallet   - Create a new Zcash wallet');
+  console.log('10. list-wallets   - List all wallets');
+  console.log('11. check-onchain  - Check if token exists on blockchain');
+  console.log('12. exit           - Exit CLI');
   console.log('');
 }
 
@@ -60,10 +67,33 @@ async function cmdCreateToken() {
       return;
     }
 
-    const recipientAddress = await question('Recipient Zcash Address (z-addr): ');
-    if (!recipientAddress.trim()) {
-      console.log('[ERROR] Recipient address is required.');
-      return;
+    // Show existing wallets
+    const wallets = walletManager.getAllWallets();
+    let recipientAddress = '';
+    
+    if (wallets.length > 0) {
+      console.log('\nYour Wallets:');
+      wallets.forEach((wallet, index) => {
+        console.log(`${index + 1}. ${wallet.name} - ${wallet.address}`);
+      });
+      console.log('');
+      
+      const useWallet = await question('Use existing wallet? (enter number or "n" for new address): ');
+      if (useWallet.trim() !== 'n' && useWallet.trim() !== '') {
+        const walletIndex = parseInt(useWallet) - 1;
+        if (walletIndex >= 0 && walletIndex < wallets.length) {
+          recipientAddress = wallets[walletIndex].address;
+          console.log(`[INFO] Using wallet: ${wallets[walletIndex].name}`);
+        }
+      }
+    }
+    
+    if (!recipientAddress) {
+      recipientAddress = await question('Recipient Zcash Address (z-addr): ');
+      if (!recipientAddress.trim()) {
+        console.log('[ERROR] Recipient address is required.');
+        return;
+      }
     }
 
     const finalizeInput = await question('Finalize token? (yes/no, default: no): ');
@@ -332,6 +362,109 @@ async function cmdFinalize() {
   }
 }
 
+async function cmdCreateWallet() {
+  console.log('\n--- Create New Wallet ---\n');
+  
+  try {
+    const name = await question('Wallet Name: ');
+    if (!name.trim()) {
+      console.log('[ERROR] Wallet name is required.');
+      return;
+    }
+
+    const typeInput = await question('Address Type (sapling/orchard, default: sapling): ') || 'sapling';
+    const type = typeInput.toLowerCase() === 'orchard' ? 'orchard' : 'sapling';
+
+    console.log('\n[INFO] Generating wallet...');
+    const wallet = walletManager.createWallet(name.trim(), type);
+
+    console.log('\n[SUCCESS] Wallet created!');
+    console.log('Wallet Name:', wallet.name);
+    console.log('Wallet ID:', wallet.id);
+    console.log('Address:', wallet.address);
+    console.log('Type:', wallet.type);
+    console.log('Network:', wallet.network);
+    console.log('\n[WARNING] Private key is stored locally. Keep it secure!');
+    console.log('[NOTE] This is a testnet wallet for testing purposes.');
+  } catch (error) {
+    console.error('[ERROR] Error creating wallet:', error.message);
+  }
+}
+
+async function cmdListWallets() {
+  console.log('\n--- My Wallets ---\n');
+  
+  try {
+    const wallets = walletManager.getAllWallets();
+    
+    if (wallets.length === 0) {
+      console.log('[INFO] No wallets found.');
+      console.log('[INFO] Use "create-wallet" command to create a new wallet.');
+      return;
+    }
+
+    console.log(`Found ${wallets.length} wallet(s):\n`);
+    console.log('┌──────────────┬──────────────────────────────────────────┬──────────┬──────────┐');
+    console.log('│ Name         │ Address                                  │ Type     │ Balance  │');
+    console.log('├──────────────┼──────────────────────────────────────────┼──────────┼──────────┤');
+    
+    wallets.forEach(wallet => {
+      const name = wallet.name.padEnd(12).substring(0, 12);
+      const address = wallet.address.substring(0, 40) + '...';
+      const type = wallet.type.padEnd(8).substring(0, 8);
+      const balance = (wallet.balance || '0').padEnd(8).substring(0, 8);
+      console.log(`│ ${name} │ ${address.padEnd(40)} │ ${type} │ ${balance} │`);
+    });
+    
+    console.log('└──────────────┴──────────────────────────────────────────┴──────────┴──────────┘');
+  } catch (error) {
+    console.error('[ERROR] Error listing wallets:', error.message);
+  }
+}
+
+async function cmdCheckOnChain() {
+  console.log('\n--- Check Token On-Chain ---\n');
+  
+  try {
+    const assetId = await question('Asset ID: ');
+    if (!assetId.trim()) {
+      console.log('[ERROR] Asset ID is required.');
+      return;
+    }
+
+    console.log('\n[INFO] Checking token on blockchain...');
+    const result = await blockchain.checkTokenOnChain(assetId.trim());
+
+    console.log('\n--- On-Chain Status ---');
+    console.log('Asset ID:', result.assetId);
+    console.log('Exists on-chain:', result.exists ? 'Yes' : 'No');
+    console.log('Status:', result.status);
+    
+    if (result.transactionId) {
+      console.log('Transaction ID:', result.transactionId);
+    }
+    if (result.blockHeight) {
+      console.log('Block Height:', result.blockHeight);
+    }
+    
+    console.log('\nMessage:', result.message);
+    
+    // Also show local token info if available
+    const token = tokenCreator.getTokenByAssetId(assetId.trim());
+    if (token) {
+      console.log('\n--- Local Token Info ---');
+      console.log('Name:', token.name);
+      console.log('Symbol:', token.symbol);
+      console.log('Status:', token.status);
+      if (token.transactionId) {
+        console.log('Local Transaction ID:', token.transactionId);
+      }
+    }
+  } catch (error) {
+    console.error('[ERROR] Error checking on-chain:', error.message);
+  }
+}
+
 async function main() {
   console.log('Zcash Meme Coin CLI Tool');
   console.log('ZIP 227: Zcash Shielded Assets (ZSA)');
@@ -348,9 +481,9 @@ async function main() {
     keys.generateOrLoadKeys();
   }
 
-  while (true) {
+    while (true) {
     displayMenu();
-    const choice = await question('Select command (1-9): ');
+    const choice = await question('Select command (1-12): ');
 
     switch (choice.trim()) {
       case '1':
@@ -378,12 +511,21 @@ async function main() {
         await cmdFinalize();
         break;
       case '9':
+        await cmdCreateWallet();
+        break;
+      case '10':
+        await cmdListWallets();
+        break;
+      case '11':
+        await cmdCheckOnChain();
+        break;
+      case '12':
         console.log('\nGoodbye!');
         rl.close();
         process.exit(0);
         break;
       default:
-        console.log('\n[ERROR] Invalid option. Please select 1-9.');
+        console.log('\n[ERROR] Invalid option. Please select 1-12.');
     }
   }
 }

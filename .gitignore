@@ -12,7 +12,10 @@ tokens/
 *.token
 keys/
 *.key
+wallets/
+*.wallet
 test-tokens/
 test-keys/
 coverage/
 *.test.js.map
+*.lcov
