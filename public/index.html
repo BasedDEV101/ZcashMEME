@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zcash Meme Coin - ZMC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .header .symbol {
+            font-size: 1.5em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .info-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .info-card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .status-testnet {
+            background: #ffc107;
+            color: #000;
+        }
+
+        .status-dev {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+        }
+
+        .balance-display {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Zcash Meme Coin</h1>
+            <div class="symbol" id="symbol">ZMC</div>
+        </div>
+
+        <div class="content">
+            <div class="alert alert-warning">
+                <strong>⚠️ Development Preview</strong><br>
+                ZSAs (Zcash Shielded Assets) are not yet fully implemented on testnet. 
+                This interface is ready for when ZSAs become available.
+            </div>
+
+            <div class="info-card">
+                <h2>Token Information</h2>
+                <div class="info-item">
+                    <span class="info-label">Name:</span>
+                    <span class="info-value" id="tokenName">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Symbol:</span>
+                    <span class="info-value" id="tokenSymbol">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Total Supply:</span>
+                    <span class="info-value" id="tokenSupply">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Network:</span>
+                    <span class="info-value">
+                        <span class="status-badge status-testnet" id="network">Testnet</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h2>Check Balance</h2>
+                <div class="form-group">
+                    <label for="balanceAddress">Zcash Address:</label>
+                    <input type="text" id="balanceAddress" placeholder="Enter Zcash address">
+                </div>
+                <button class="btn" onclick="checkBalance()">Check Balance</button>
+                <div class="balance-display" id="balanceDisplay" style="display: none;">
+                    <div id="balanceAmount">0</div>
+                    <div style="font-size: 0.5em; color: #666; margin-top: 10px;" id="balanceSymbol">ZMC</div>
+                </div>
+            </div>
+
+            <div class="loading" id="loading">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load token configuration
+        async function loadTokenConfig() {
+            try {
+                const response = await fetch('/api/token/config');
+                const config = await response.json();
+                
+                document.getElementById('tokenName').textContent = config.name;
+                document.getElementById('tokenSymbol').textContent = config.symbol;
+                document.getElementById('symbol').textContent = config.symbol;
+                document.getElementById('tokenSupply').textContent = 
+                    parseInt(config.totalSupply).toLocaleString() + ' ' + config.symbol;
+            } catch (error) {
+                console.error('Failed to load token config:', error);
+            }
+        }
+
+        // Check balance
+        async function checkBalance() {
+            const address = document.getElementById('balanceAddress').value.trim();
+            
+            if (!address) {
+                alert('Please enter a Zcash address');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const balanceDisplay = document.getElementById('balanceDisplay');
+            
+            loading.classList.add('show');
+            balanceDisplay.style.display = 'none';
+
+            try {
+                const response = await fetch(`/api/token/balance/${address}`);
+                const data = await response.json();
+                
+                document.getElementById('balanceAmount').textContent = 
+                    parseFloat(data.balance).toLocaleString();
+                document.getElementById('balanceSymbol').textContent = data.symbol;
+                balanceDisplay.style.display = 'block';
+            } catch (error) {
+                alert('Failed to check balance: ' + error.message);
+            } finally {
+                loading.classList.remove('show');
+            }
+        }
+
+        // Load config on page load
+        loadTokenConfig();
+    </script>
+</body>
+</html>

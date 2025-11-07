@@ -1,0 +1,31 @@
+{
+  "name": "zcash-meme-coin",
+  "version": "1.0.0",
+  "description": "A meme coin project built for Zcash using ZSAs (Zcash Shielded Assets)",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "deploy": "node scripts/deploy.js",
+    "test": "node scripts/test.js",
+    "setup": "node scripts/setup.js",
+    "git:setup": "node scripts/git-setup.js",
+    "git:push": "node scripts/git-push.js"
+  },
+  "keywords": [
+    "zcash",
+    "zsa",
+    "meme-coin",
+    "cryptocurrency",
+    "testnet"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  }
+}

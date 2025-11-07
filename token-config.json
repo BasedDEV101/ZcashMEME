@@ -1,0 +1,14 @@
+{
+  "name": "ZcashMemeCoin",
+  "symbol": "ZMC",
+  "description": "The first meme coin on Zcash! 🚀",
+  "totalSupply": "1000000000",
+  "decimals": 8,
+  "testnet": true,
+  "network": "zcash-testnet",
+  "metadata": {
+    "website": "https://zcashmemecoin.example.com",
+    "twitter": "@ZcashMemeCoin",
+    "telegram": "https://t.me/zcashmemecoin"
+  }
+}
