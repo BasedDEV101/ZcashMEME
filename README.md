@@ -2,6 +2,8 @@
 
 A meme coin project built for Zcash using ZSAs (Zcash Shielded Assets) as defined in ZIP227.
 
+**Repository:** [https://github.com/BasedDEV101/ZcashMEME](https://github.com/BasedDEV101/ZcashMEME)
+
 ## ⚠️ Current Status
 
 **ZSAs (Zcash Shielded Assets) are not yet fully implemented on testnet.** This project is prepared and ready for when ZSAs become available. Currently, it includes:
@@ -71,13 +73,16 @@ zcash-meme-coin/
 ├── scripts/
 │   ├── setup.js          # Setup script
 │   ├── deploy.js         # Deployment script (for when ZSAs are available)
-│   └── test.js           # Testing utilities
+│   ├── test.js           # Testing utilities
+│   ├── git-setup.js      # Git repository setup
+│   └── git-push.js       # Push to GitHub script
 ├── src/
 │   ├── zcash-client.js   # Zcash RPC client
 │   └── token-manager.js  # Token management logic
 ├── public/
 │   └── index.html        # Web interface
 ├── token-config.json     # Token configuration
+├── .env.example          # Environment variables template
 ├── package.json          # Dependencies
 └── README.md            # This file
 ```
@@ -88,6 +93,8 @@ zcash-meme-coin/
 - `npm run dev` - Start the development server
 - `npm run deploy` - Deploy token (when ZSAs are available)
 - `npm test` - Run tests
+- `npm run git:setup` - Configure git repository and remote
+- `npm run git:push` - Push code to GitHub (usage: `npm run git:push -- "commit message"`)
 
 ## 🎯 Token Features
 
