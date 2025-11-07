@@ -8,3 +8,7 @@ build/
 .vscode/
 .idea/
 .token-id
+tokens/
+*.token
+keys/
+*.key

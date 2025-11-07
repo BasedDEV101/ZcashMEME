@@ -1,7 +1,7 @@
 {
   "name": "ZcashMemeCoin",
   "symbol": "ZMC",
-  "description": "The first meme coin on Zcash! 🚀",
+  "description": "The first meme coin on Zcash using Zcash Shielded Assets",
   "totalSupply": "1000000000",
   "decimals": 8,
   "testnet": true,
