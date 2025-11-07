@@ -109,6 +109,11 @@ export class IssuanceKeys {
    * Generate or load issuance keys
    */
   generateOrLoadKeys() {
+    // Ensure directory exists
+    if (!fs.existsSync(this.keysDir)) {
+      fs.mkdirSync(this.keysDir, { recursive: true });
+    }
+
     if (fs.existsSync(this.keysFile)) {
       const keysData = JSON.parse(fs.readFileSync(this.keysFile, 'utf8'));
       return keysData;

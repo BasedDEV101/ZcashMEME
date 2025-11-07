@@ -12,3 +12,7 @@ tokens/
 *.token
 keys/
 *.key
+test-tokens/
+test-keys/
+coverage/
+*.test.js.map

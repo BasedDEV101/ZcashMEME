@@ -105,6 +105,9 @@ export class TokenCreator {
       transaction: tx
     };
 
+    // Ensure directory exists
+    this.ensureTokensDir();
+
     // Save token to storage
     const tokens = this.getAllTokens();
     tokens.push(token);
@@ -157,6 +160,7 @@ export class TokenCreator {
     );
 
     // Update token
+    this.ensureTokensDir();
     token.totalSupply = newSupply.toString();
     token.status = 'pending';
     tokens[tokenIndex] = token;
@@ -199,6 +203,7 @@ export class TokenCreator {
       true // finalize = true
     );
 
+    this.ensureTokensDir();
     token.finalized = true;
     token.status = 'pending_finalization';
     tokens[tokenIndex] = token;
@@ -251,6 +256,7 @@ export class TokenCreator {
    * Update token status
    */
   updateTokenStatus(assetId, status, transactionId = null) {
+    this.ensureTokensDir();
     const tokens = this.getAllTokens();
     const tokenIndex = tokens.findIndex(t => t.assetId === assetId);
     

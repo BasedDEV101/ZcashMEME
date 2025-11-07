@@ -9,6 +9,9 @@
     "cli": "node cli.js",
     "deploy": "node scripts/deploy.js",
     "test": "node scripts/test.js",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "setup": "node scripts/setup.js"
   },
   "keywords": [
@@ -29,6 +32,8 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0"
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.10.0",
+    "jest": "^30.2.0"
   }
 }

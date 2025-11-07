@@ -212,7 +212,10 @@ Transactions are built according to ZIP 227:
 - `npm start` or `npm run cli` - Start the CLI interface
 - `npm run setup` - Set up the project environment
 - `npm run deploy` - Deploy token (when ZSAs are available)
-- `npm test` - Run tests
+- `npm test` - Run basic setup tests
+- `npm run test:unit` - Run comprehensive unit tests
+- `npm run test:watch` - Run tests in watch mode
+- `npm run test:coverage` - Run tests with coverage report
 
 ## Token Features
 
