@@ -74,19 +74,19 @@ describe('IssuanceKeys', () => {
     const seed = keys.generateSeed(32);
     const { masterKey, chainCode } = keys.generateMasterKey(seed);
     const { isk } = keys.deriveIssuanceKey(masterKey, chainCode, 0);
-    const ik = keys.deriveValidatingKey(isk);
+    const { ik } = keys.deriveValidatingKey(isk);
     
     expect(ik).toBeDefined();
     expect(ik.length).toBe(32);
   });
 
   test('should encode issuer identifier', () => {
-    const ik = Buffer.alloc(32, 0xAB);
-    const issuer = keys.encodeIssuer(ik);
+    const issuer = keys.encodeIssuer(Buffer.alloc(32, 0xAB));
     
     expect(issuer).toBeDefined();
     expect(typeof issuer).toBe('string');
-    expect(issuer.length).toBe(64); // 32 bytes = 64 hex chars
+    expect(issuer.length).toBe(66); // 0x00 prefix + 32 bytes = 66 hex chars
+    expect(issuer.startsWith('00')).toBe(true);
   });
 
   test('should generate or load keys', () => {
@@ -98,6 +98,7 @@ describe('IssuanceKeys', () => {
     expect(keysData.isk).toBeDefined();
     expect(keysData.ik).toBeDefined();
     expect(keysData.issuer).toBeDefined();
+    expect(keysData.issuer.length).toBe(66);
     expect(keysData.createdAt).toBeDefined();
   });
 
@@ -116,7 +117,8 @@ describe('IssuanceKeys', () => {
     
     expect(issuer).toBeDefined();
     expect(typeof issuer).toBe('string');
-    expect(issuer.length).toBe(64);
+    expect(issuer.length).toBe(66);
+    expect(issuer.startsWith('00')).toBe(true);
   });
 
   test('should get issuance authorizing key', () => {

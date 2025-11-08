@@ -328,6 +328,31 @@ async function cmdInfo() {
       console.log('Transaction ID:', token.transactionId);
     }
     console.log('Asset Description (ZIP 227):', token.assetDesc);
+    if (token.history && token.history.length > 0) {
+      console.log('\n--- History ---');
+      token.history.forEach((event, index) => {
+        const time = new Date(event.timestamp).toLocaleString();
+        const base = `${index + 1}. ${event.type} @ ${time}`;
+        const details = [];
+        if (event.amount) {
+          details.push(`amount=${parseInt(event.amount).toLocaleString()}`);
+        }
+        if (event.recipient) {
+          details.push(`recipient=${event.recipient}`);
+        }
+        if (event.transactionId) {
+          details.push(`tx=${event.transactionId}`);
+        }
+        if (event.finalized !== undefined) {
+          details.push(`finalized=${event.finalized ? 'yes' : 'no'}`);
+        }
+        if (details.length > 0) {
+          console.log(`${base} (${details.join(', ')})`);
+        } else {
+          console.log(base);
+        }
+      });
+    }
   } catch (error) {
     console.error('[ERROR] Error:', error.message);
   }

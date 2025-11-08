@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import secp256k1 from 'secp256k1';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,13 +42,11 @@ export class IssuanceKeys {
    * - Issuance.CKDDomain := 0x81
    */
   generateMasterKey(seed) {
-    // Simplified implementation - in production, use proper ZIP 32 derivation
-    // This uses HMAC-SHA512 with the domain separator
-    const domain = 'ZcashSA_Issue_V1';
+    const domain = Buffer.from('ZcashSA_Issue_V1', 'utf8');
     const hmac = crypto.createHmac('sha512', domain);
     hmac.update(seed);
     const result = hmac.digest();
-    
+
     return {
       masterKey: result.slice(0, 32),
       chainCode: result.slice(32, 64)
@@ -63,25 +62,47 @@ export class IssuanceKeys {
    * Example: m/227'/133'/0'
    */
   deriveIssuanceKey(masterKey, chainCode, account = 0) {
-    // Simplified key derivation
-    // In production, implement proper BIP32/CKD derivation
-    const purpose = 227;
-    const coinType = 133; // Testnet
-    
-    const pathData = Buffer.concat([
-      Buffer.from([purpose | 0x80000000]),
-      Buffer.from([coinType | 0x80000000]),
-      Buffer.from([account | 0x80000000])
-    ]);
+    const hardened = (index) => (index | 0x80000000) >>> 0;
+    const path = [
+      hardened(227), // purpose
+      hardened(133), // zcash testnet coin type per ZIP-32 draft
+      hardened(account)
+    ];
 
-    const hmac = crypto.createHmac('sha512', chainCode);
-    hmac.update(masterKey);
-    hmac.update(pathData);
-    const result = hmac.digest();
+    let key = Buffer.from(masterKey);
+    let cc = Buffer.from(chainCode);
+
+    path.forEach((index) => {
+      const data = Buffer.alloc(1 + key.length + 4);
+      data[0] = 0x00;
+      key.copy(data, 1);
+      data.writeUInt32BE(index, data.length - 4);
+
+      let derived = crypto.createHmac('sha512', cc).update(data).digest();
+      let childKey = derived.slice(0, 32);
+      let childChain = derived.slice(32, 64);
+
+      // Ensure the derived private key is valid; if not, bump index deterministically
+      let tweakIndex = 1;
+      while (!secp256k1.privateKeyVerify(childKey)) {
+        const retryData = Buffer.alloc(data.length);
+        data.copy(retryData);
+        const bump = Buffer.alloc(4);
+        bump.writeUInt32BE(tweakIndex, 0);
+        retryData.set(bump, retryData.length - 4);
+        derived = crypto.createHmac('sha512', cc).update(retryData).digest();
+        childKey = derived.slice(0, 32);
+        childChain = derived.slice(32, 64);
+        tweakIndex += 1;
+      }
+
+      key = childKey;
+      cc = childChain;
+    });
 
     return {
-      isk: result.slice(0, 32), // Issuance Authorizing Key
-      chainCode: result.slice(32, 64)
+      isk: key,
+      chainCode: cc
     };
   }
 
@@ -89,20 +110,31 @@ export class IssuanceKeys {
    * Derive validating key (ik) from issuance key (isk)
    */
   deriveValidatingKey(isk) {
-    // Simplified - in production use proper elliptic curve point derivation
-    // ik = G * isk where G is the generator point
-    const hash = crypto.createHash('sha256');
-    hash.update(isk);
-    hash.update('ZcashSA_Issue_V1_ik');
-    return hash.digest();
+    let privateKey = Buffer.from(isk);
+    if (!secp256k1.privateKeyVerify(privateKey)) {
+      throw new Error('Invalid issuance key');
+    }
+
+    let publicKey = secp256k1.publicKeyCreate(privateKey, true);
+
+    if (publicKey[0] === 0x03) {
+      privateKey = secp256k1.privateKeyNegate(privateKey);
+      publicKey = secp256k1.publicKeyCreate(privateKey, true);
+    }
+
+    return {
+      ik: Buffer.from(publicKey.slice(1)), // 32-byte x-coordinate
+      normalizedISK: privateKey
+    };
   }
 
   /**
    * Encode issuer identifier (ik_encoding)
    */
   encodeIssuer(ik) {
-    // ZIP 227: ik_encoding is 32 bytes
-    return Buffer.from(ik).toString('hex');
+    const ikBuffer = Buffer.from(ik);
+    const encoding = Buffer.concat([Buffer.from([0x00]), ikBuffer]);
+    return encoding.toString('hex');
   }
 
   /**
@@ -110,20 +142,36 @@ export class IssuanceKeys {
    */
   generateOrLoadKeys() {
     // Ensure directory exists
-    if (!fs.existsSync(this.keysDir)) {
-      fs.mkdirSync(this.keysDir, { recursive: true });
-    }
+    this.ensureKeysDir();
+    let loadedKeys = null;
 
     if (fs.existsSync(this.keysFile)) {
-      const keysData = JSON.parse(fs.readFileSync(this.keysFile, 'utf8'));
-      return keysData;
+      try {
+        const keysData = JSON.parse(fs.readFileSync(this.keysFile, 'utf8'));
+        if (keysData.issuer && keysData.issuer.length === 66) {
+          return keysData;
+        }
+        loadedKeys = keysData;
+      } catch (error) {
+        if (error.code !== 'ENOENT' && error.code !== 'EPERM') {
+          throw error;
+        }
+        // Treat as missing file and continue to regeneration branch
+      }
+
+      if (loadedKeys) {
+        const upgraded = this.upgradeLegacyKeys(loadedKeys);
+        fs.writeFileSync(this.keysFile, JSON.stringify(upgraded, null, 2));
+        return upgraded;
+      }
     }
 
     // Generate new keys
     const seed = this.generateSeed(32);
     const { masterKey, chainCode } = this.generateMasterKey(seed);
-    const { isk, chainCode: derivedChainCode } = this.deriveIssuanceKey(masterKey, chainCode, 0);
-    const ik = this.deriveValidatingKey(isk);
+    let { isk, chainCode: derivedChainCode } = this.deriveIssuanceKey(masterKey, chainCode, 0);
+    const { ik, normalizedISK } = this.deriveValidatingKey(isk);
+    isk = normalizedISK;
     const issuer = this.encodeIssuer(ik);
 
     const keysData = {
@@ -132,14 +180,44 @@ export class IssuanceKeys {
       chainCode: chainCode.toString('hex'),
       isk: isk.toString('hex'),
       ik: ik.toString('hex'),
+      issuerEncoding: issuer,
       issuer: issuer,
       createdAt: new Date().toISOString()
     };
 
     // Save keys (in production, encrypt this!)
-    fs.writeFileSync(this.keysFile, JSON.stringify(keysData, null, 2));
+    fs.mkdirSync(path.dirname(this.keysFile), { recursive: true });
+    try {
+      fs.writeFileSync(this.keysFile, JSON.stringify(keysData, null, 2));
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        this.ensureKeysDir();
+        fs.writeFileSync(this.keysFile, JSON.stringify(keysData, null, 2));
+      } else {
+        throw error;
+      }
+    }
 
     return keysData;
+  }
+
+  upgradeLegacyKeys(keysData) {
+    if (!keysData || !keysData.isk) {
+      throw new Error('Unable to upgrade legacy issuance keys');
+    }
+
+    const legacyISK = Buffer.from(keysData.isk, 'hex');
+    const { ik, normalizedISK } = this.deriveValidatingKey(legacyISK);
+    const issuer = this.encodeIssuer(ik);
+
+    return {
+      ...keysData,
+      ik: ik.toString('hex'),
+      isk: normalizedISK.toString('hex'),
+      issuer,
+      issuerEncoding: issuer,
+      upgradedAt: new Date().toISOString()
+    };
   }
 
   /**

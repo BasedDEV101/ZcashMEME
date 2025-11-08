@@ -104,3 +104,4 @@ echo "1. Add your SSH public key to GitHub as a Signing Key (see instructions ab
 echo "2. Test with: git commit --allow-empty -m 'Test signed commit'"
 echo "3. Push and check on GitHub - commit should show as 'Verified'"
 echo ""
+

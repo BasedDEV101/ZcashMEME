@@ -59,3 +59,4 @@ async function createTestToken() {
 }
 
 createTestToken();
+

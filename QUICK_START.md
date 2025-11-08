@@ -79,3 +79,4 @@ Asset ID: 00abcdef...
 - Use `info` to get detailed token information
 - Use `check-onchain` to verify deployment status
 - When ZSAs become available, use `deploy` to deploy your tokens
+

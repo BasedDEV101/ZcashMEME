@@ -137,3 +137,4 @@ export class WalletManager {
     return '0';
   }
 }
+

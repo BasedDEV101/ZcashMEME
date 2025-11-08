@@ -4,7 +4,6 @@
 
 // Jest tests use global functions in Node.js ESM mode
 import { TokenCreator } from '../src/token-creator.js';
-import { IssuanceKeys } from '../src/keys.js';
 import { computeAssetId, createAssetDescription } from '../src/crypto.js';
 import fs from 'fs';
 import path from 'path';
@@ -44,6 +43,10 @@ describe('Integration Tests', () => {
     tokenCreator.tokensFile = path.join(testTokensDir, 'created-tokens.json');
     tokenCreator.keys.keysDir = testKeysDir;
     tokenCreator.keys.keysFile = path.join(testKeysDir, 'issuance-keys.json');
+    tokenCreator.keys.ensureKeysDir();
+    tokenCreator.issuance.keys.keysDir = testKeysDir;
+    tokenCreator.issuance.keys.keysFile = path.join(testKeysDir, 'issuance-keys.json');
+    tokenCreator.issuance.keys.ensureKeysDir();
   });
 
   afterEach(() => {
@@ -64,18 +67,10 @@ describe('Integration Tests', () => {
 
   test('should create complete token with all ZIP 227 components', async () => {
     // Step 1: Generate keys
-    const keys = new IssuanceKeys();
-    keys.keysDir = testKeysDir;
-    keys.keysFile = path.join(testKeysDir, 'issuance-keys.json');
-    const issuer = keys.getIssuer();
-    
-    // Step 2: Create asset description
-    const assetDesc = createAssetDescription('PepeCoin', 'PEPE', 'The memest coin');
-    
-    // Step 3: Compute asset ID
-    const { assetId } = computeAssetId(issuer, assetDesc);
-    
-    // Step 4: Create token
+    // Preload keys to ensure deterministic issuer
+    tokenCreator.keys.getIssuer();
+
+    // Step 2: Create token
     const tokenData = {
       name: 'PepeCoin',
       symbol: 'PEPE',
@@ -86,9 +81,13 @@ describe('Integration Tests', () => {
     };
     
     const token = await tokenCreator.createToken(tokenData);
+
+    // Step 3: Compute expected values
+    const assetDesc = createAssetDescription('PepeCoin', 'PEPE', 'The memest coin');
+    const { assetId } = computeAssetId(token.issuer, assetDesc);
     
     // Verify all components
-    expect(token.issuer).toBe(issuer);
+    expect(token.issuer).toBe(tokenCreator.keys.getIssuer());
     expect(token.assetId).toBe(assetId);
     expect(token.assetDesc).toBe(assetDesc);
     expect(token.name).toBe('PepeCoin');

@@ -17,14 +17,57 @@ describe('IssuanceTransaction', () => {
   const testKeysDir = path.join(__dirname, '..', 'test-keys');
 
   beforeEach(() => {
-    // Clean up test keys directory
-    if (fs.existsSync(testKeysDir)) {
-      fs.rmSync(testKeysDir, { recursive: true, force: true });
+    const cleanup = (dir) => {
+      if (fs.existsSync(dir)) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+        } catch (error) {
+          if (process.platform === 'win32') {
+            try {
+              const files = fs.readdirSync(dir);
+              files.forEach(file => {
+                try {
+                  fs.unlinkSync(path.join(dir, file));
+                } catch (e) {
+                  // Ignore
+                }
+              });
+            } catch (e) {
+              // Ignore
+            }
+          } else {
+            throw error;
+          }
+        }
+      }
+    };
+
+    cleanup(testKeysDir);
+
+    if (process.platform === 'win32') {
+      const start = Date.now();
+      while (Date.now() - start < 100) {
+        // Wait briefly for file handles to release
+      }
     }
-    
+
     issuance = new IssuanceTransaction();
     issuance.keys.keysDir = testKeysDir;
     issuance.keys.keysFile = path.join(testKeysDir, 'issuance-keys.json');
+  });
+
+  afterEach(() => {
+    const cleanup = (dir) => {
+      if (fs.existsSync(dir)) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+        } catch (error) {
+          // Ignore cleanup errors in tests
+        }
+      }
+    };
+
+    cleanup(testKeysDir);
   });
 
   test('should create asset description from token data', () => {

@@ -1,28 +1,30 @@
 # Zcash Meme Coin CLI Tool - ZIP 227 Implementation
 
-A complete CLI tool for creating and managing Zcash Shielded Assets (meme) tokens on Zcash testnet using ZIP 227: Zcash Shielded Assets (ZSA).
+A CLI playground for modelling Zcash Shielded Asset (ZSA) issuance flows described in ZIP 227. The utilities here mimic the spec so builders can experiment today, while we wait for OrchardZSA support to land in public nodes.
 
 **Repository:** [https://github.com/BasedDEV101/ZcashMEME](https://github.com/BasedDEV101/ZcashMEME)
 
 ## Overview
 
-This CLI tool implements ZIP 227 specification for creating custom assets (meme coins) on Zcash. It follows the complete guide for ZSA implementation, including:
-
-- Issuance key generation (ZIP 32 derivation)
-- Asset description creation
-- Issuance transaction building
-- Asset ID calculation
-- Token management and operations
+The project tracks the ZIP 227 design, with real derivations for issuance keys and canonical Asset IDs. Transfer, burn, and consensus updates are still mocked (no public ZSA network exists yet), but the interfaces are shaped so we can swap to real Orchard transactions once they ship.
 
 ## Current Status
 
-**ZSAs (Zcash Shielded Assets) are not yet fully implemented on testnet.** This tool is prepared and ready for when ZSAs become available. Currently, it includes:
+**ZSAs (Zcash Shielded Assets) are not yet live on testnet.** Today the repo offers a spec-aligned façade with mocked back ends; as OrchardZSA components become available we can drop in the missing primitives.
 
-- ZIP 227-compliant key generation
-- Asset description and ID calculation
-- Issuance transaction construction
-- Token storage and management
-- CLI interface for all operations
+### What is implemented now
+- ZIP-32 hardened derivation path `m/227'/133'/0'` for issuance keys, with BIP-340 compliant public key encoding (`issuer = 0x00 || x-coordinate`).
+- Canonical asset description hashing and Asset ID construction per draft ZIP 227 (with temporary SHA-256 stand-ins for BLAKE2b).
+- Deterministic issuance bundle scaffolding and local state/history tracking for created assets.
+- CLI flows for token lifecycle management (create, issue-more, finalize, inspect) operating on persisted JSON.
+
+### Still mocked / TODO
+- Orchard action groups, note commitments, consensus validation, and MAX_ISSUE enforcement happen only in memory.
+- `issueAuthSig` is simulated; we do not yet build or sign Version 6 transactions.
+- Transfer/burn operations remain placeholders until ZIP 226 is deployable.
+- GroupHash and BLAKE2b implementations use simplified hashes — swap to real primitives before mainnet.
+
+See `docs/ZSA_COMPLIANCE.md` for a running checklist.
 
 ## Prerequisites
 
@@ -172,12 +174,12 @@ zcash-meme-coin/
 
 ### Key Generation
 
-The tool implements ZIP 227 key generation:
+The tool implements the ZIP 227 key ladder:
 
-- **Master Key**: Generated from 32-byte seed using ZIP 32
-- **Issuance Key (isk)**: Derived from master key using path `m/227'/133'/0'`
-- **Validating Key (ik)**: Derived from isk
-- **Issuer Identifier**: 32-byte encoding of ik
+- **Master Key**: Derived from a 32-byte seed using the `ZcashSA_Issue_V1` domain (ZIP 32 hardened-only tree).
+- **Issuance Key (`isk`)**: Produced via the hardened path `m/227'/133'/0'`.
+- **Validating Key (`ik`)**: BIP-340 compliant x-coordinate derived from `isk`, normalized to even Y parity.
+- **Issuer Identifier**: `issuer = 0x00 || ik`, matching the draft spec encoding.
 
 ### Asset Description
 
@@ -200,12 +202,12 @@ AssetId = [0x00 || issuer (32 bytes) || asset_desc_hash (32 bytes)]
 
 ### Issuance Transaction
 
-Transactions are built according to ZIP 227:
+The local transaction objects follow the ZIP 227 layout (still off-chain):
 
-- **Version**: 6 (required for ZSAs)
-- **Issuance Bundle**: Contains issuer, actions, and signature
-- **Issue Action**: Contains asset_desc_hash, notes, and finalize flag
-- **Signature**: BIP 340 Schnorr signature with isk
+- **Version**: 6 (placeholder flag).
+- **Issuance Bundle**: Stores issuer encoding, actions, and simulated signatures.
+- **Issue Action**: Carries `asset_desc_hash`, mock notes, and `finalize`.
+- **Signature**: Placeholder string; swap for a real BIP-340 Schnorr signature once OrchardZSA SIGHASH is available.
 
 ## Available Scripts
 
@@ -237,14 +239,47 @@ To make your commits show as "Verified" on GitHub:
 
 ## Token Features
 
-Once ZSAs are available, this tool will support:
+Once ZSAs are available, this tooling is ready to plug in:
 
-- Token creation on Zcash testnet (ZIP 227)
-- Additional token issuance (if not finalized)
-- Token transfers (ZIP 226 - OrchardZSA)
-- Token burning
-- Balance queries
-- Shielded transactions (privacy-preserving)
+- Token creation on Zcash testnet (ZIP 227) using live consensus calls instead of mocks.
+- Additional token issuance (if not finalized) with real issuance actions.
+- Token transfers (ZIP 226 - OrchardZSA).
+- Token burning and on-chain supply reconciliation.
+- Balance queries and shielded transfers via Orchard components.
+## Solana → Zcash ZSA Migration Plan (Preview)
+
+We expect many meme projects to launch liquidity on Solana first. When ZSAs land, the migration path will look like:
+
+1. **Inventory & Freeze**  
+   - Snapshot Solana token supply and circulating balances.  
+   - Pause new minting (or burn remaining authority) to guarantee 1:1 backing.
+
+2. **Custody & Bridge Setup**  
+   - Select a ZSA-aware custodian/multisig that holds the Solana reserves.  
+   - Stand up a relayer service that can observe Solana burn events and trigger ZSA issuance.
+
+3. **Issuance Key Provisioning**  
+   - Use this CLI to derive the production `isk/ik` pair following `m/227'/133'/0'`.  
+   - Store the `issuer` encoding on the coordination service; guard the private key inside HSM or MPC.
+
+4. **Asset Definition**  
+   - Publish the canonical asset description (`name|symbol|description`) alongside a signed statement linking it to the Solana mint address.  
+   - Distribute pet-name metadata so wallets can map the Asset ID to brand assets.
+
+5. **Peg-In / Mint Flow**  
+   - Users burn or lock their Solana tokens in the bridge contract.  
+   - The relayer assembles a ZIP-227 issuance transaction (using the real OrchardZSA libraries) and broadcasts it to Zcash testnet / mainnet.  
+   - The CLI’s issuance history log becomes the audit trail for each 1:1 mint.
+
+6. **Peg-Out / Redemption Flow**  
+   - Users submit ZSA burn proofs (ZIP 226) back to the bridge.  
+   - Upon confirmation, the custodian releases the equivalent Solana tokens.
+
+7. **Monitoring & Comms**  
+   - Provide a dashboard that scrapes `tokens/*.json` (or on-chain data once live) to show total supply, burns, and outstanding Solana reserves.  
+   - Document emergency procedures (key rotation, finalization) for transparency.
+
+We’ll publish a deeper playbook under `docs/solana-migration.md` and wire the CLI into real bridge scripts as OrchardZSA reference code becomes available.
 
 ## Maximum Supply
 

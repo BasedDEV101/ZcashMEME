@@ -246,3 +246,4 @@ Get-Content ~\.ssh\id_ed25519.pub
 - GitHub Docs: https://docs.github.com/en/authentication/managing-commit-signature-verification
 - SSH Signing: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification# ssh-commit-signature-verification
 - GPG Signing: https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key
+

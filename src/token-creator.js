@@ -24,9 +24,7 @@ export class TokenCreator {
   }
 
   ensureTokensDir() {
-    if (!fs.existsSync(this.tokensDir)) {
-      fs.mkdirSync(this.tokensDir, { recursive: true });
-    }
+    fs.mkdirSync(this.tokensDir, { recursive: true });
     if (!fs.existsSync(this.tokensFile)) {
       fs.writeFileSync(this.tokensFile, JSON.stringify([], null, 2));
     }
@@ -102,8 +100,16 @@ export class TokenCreator {
       createdAt: new Date().toISOString(),
       deployedAt: null,
       transactionId: null,
-      transaction: tx
+      transaction: tx,
+      history: []
     };
+
+    this.addHistoryEntry(token, {
+      type: 'creation',
+      amount: token.initialSupply,
+      recipient: recipientAddress,
+      finalized: finalize
+    });
 
     // Ensure directory exists
     this.ensureTokensDir();
@@ -111,11 +117,7 @@ export class TokenCreator {
     // Save token to storage
     const tokens = this.getAllTokens();
     tokens.push(token);
-    fs.writeFileSync(this.tokensFile, JSON.stringify(tokens, null, 2));
-
-    // Create individual token config file
-    const tokenConfigPath = path.join(this.tokensDir, `${token.id}.json`);
-    fs.writeFileSync(tokenConfigPath, JSON.stringify(token, null, 2));
+    this.persistTokens(tokens);
 
     return token;
   }
@@ -163,9 +165,14 @@ export class TokenCreator {
     this.ensureTokensDir();
     token.totalSupply = newSupply.toString();
     token.status = 'pending';
+    this.addHistoryEntry(token, {
+      type: 'issuance',
+      amount: amount.toString(),
+      recipient: recipientAddress
+    });
     tokens[tokenIndex] = token;
 
-    fs.writeFileSync(this.tokensFile, JSON.stringify(tokens, null, 2));
+    this.persistTokens(tokens);
 
     return {
       token,
@@ -206,9 +213,12 @@ export class TokenCreator {
     this.ensureTokensDir();
     token.finalized = true;
     token.status = 'pending_finalization';
+    this.addHistoryEntry(token, {
+      type: 'finalization'
+    });
     tokens[tokenIndex] = token;
 
-    fs.writeFileSync(this.tokensFile, JSON.stringify(tokens, null, 2));
+    this.persistTokens(tokens);
 
     return {
       token,
@@ -264,13 +274,27 @@ export class TokenCreator {
       throw new Error('Token not found');
     }
 
-    tokens[tokenIndex].status = status;
+    const token = tokens[tokenIndex];
+    token.status = status;
     if (transactionId) {
-      tokens[tokenIndex].transactionId = transactionId;
-      tokens[tokenIndex].deployedAt = new Date().toISOString();
+      token.transactionId = transactionId;
+      token.deployedAt = new Date().toISOString();
     }
 
-    fs.writeFileSync(this.tokensFile, JSON.stringify(tokens, null, 2));
+    if (status === 'deployed') {
+      this.addHistoryEntry(token, {
+        type: 'deployment',
+        transactionId: transactionId
+      });
+    } else if (status === 'failed') {
+      this.addHistoryEntry(token, {
+        type: 'deployment_failed'
+      });
+    }
+
+    tokens[tokenIndex] = token;
+
+    this.persistTokens(tokens);
 
     return tokens[tokenIndex];
   }
@@ -316,5 +340,31 @@ export class TokenCreator {
       this.updateTokenStatus(assetId, 'failed');
       throw error;
     }
+  }
+
+  /**
+   * Persist the current token list and individual token files
+   */
+  persistTokens(tokens) {
+    fs.mkdirSync(this.tokensDir, { recursive: true });
+    fs.writeFileSync(this.tokensFile, JSON.stringify(tokens, null, 2));
+    tokens.forEach(token => {
+      const tokenConfigPath = path.join(this.tokensDir, `${token.id}.json`);
+      fs.writeFileSync(tokenConfigPath, JSON.stringify(token, null, 2));
+    });
+  }
+
+  /**
+   * Add a history entry to a token record
+   */
+  addHistoryEntry(token, entry) {
+    if (!Array.isArray(token.history)) {
+      token.history = [];
+    }
+
+    token.history.push({
+      ...entry,
+      timestamp: entry.timestamp || new Date().toISOString()
+    });
   }
 }

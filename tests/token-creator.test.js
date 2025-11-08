@@ -103,6 +103,10 @@ describe('TokenCreator', () => {
     expect(token.assetId).toBeDefined();
     expect(token.assetDescHash).toBeDefined();
     expect(token.status).toBe('pending');
+    expect(token.history).toBeDefined();
+    expect(token.history.length).toBe(1);
+    expect(token.history[0].type).toBe('creation');
+    expect(token.history[0].amount).toBe('1000000');
   });
 
   test('should reject token creation with missing required fields', async () => {
@@ -214,6 +218,9 @@ describe('TokenCreator', () => {
     expect(result).toBeDefined();
     expect(result.token.totalSupply).toBe('1500000');
     expect(result.amountIssued).toBe('500000');
+    expect(result.token.history.length).toBe(2);
+    expect(result.token.history[1].type).toBe('issuance');
+    expect(result.token.history[1].amount).toBe('500000');
   });
 
   test('should reject issuing more tokens if finalized', async () => {
@@ -262,6 +269,8 @@ describe('TokenCreator', () => {
     
     expect(result.token.finalized).toBe(true);
     expect(result.token.status).toBe('pending_finalization');
+    expect(result.token.history.length).toBe(2);
+    expect(result.token.history[1].type).toBe('finalization');
   });
 
   test('should reject finalizing already finalized token', async () => {
@@ -292,6 +301,8 @@ describe('TokenCreator', () => {
       expect(updated.status).toBe('deployed');
       expect(updated.transactionId).toBe('tx123');
       expect(updated.deployedAt).toBeDefined();
+      expect(updated.history[updated.history.length - 1].type).toBe('deployment');
+      expect(updated.history[updated.history.length - 1].transactionId).toBe('tx123');
     });
   });
 
@@ -310,5 +321,6 @@ describe('TokenCreator', () => {
     expect(result.transactionId).toBeDefined();
     expect(result.assetId).toBe(token.assetId);
     expect(result.token.status).toBe('deployed');
+    expect(result.token.history[result.token.history.length - 1].type).toBe('deployment');
   });
 });
