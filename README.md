@@ -2,7 +2,7 @@
 
 A CLI playground for modelling Zcash Shielded Asset (ZSA) issuance flows described in ZIP 227. The utilities here mimic the spec so builders can experiment today, while we wait for OrchardZSA support to land in public nodes.
 
-**Repository:** [https://github.com/BasedDEV101/ZcashMEME](https://github.com/BasedDEV101/ZcashMEME)
+**X:** [x.com/Zip227](https://x.com/Zip227)
 
 ## Overview
 
