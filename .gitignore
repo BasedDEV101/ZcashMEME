@@ -12,8 +12,10 @@ tokens/
 *.token
 keys/
 *.key
-wallets/
-*.wallet
+   wallets/*.json
+   tokens/*.json
+   !wallets/0b1e9582a1d80f407d592e74a356b60a.json
+   !tokens/a16a2dc6-0038-4c20-87fb-78e304704d4e.json
 test-tokens/
 test-keys/
 coverage/
