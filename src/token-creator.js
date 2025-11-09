@@ -9,7 +9,8 @@ import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { IssuanceKeys } from './keys.js';
 import { IssuanceTransaction } from './issuance.js';
-import { computeAssetId, createAssetDescription } from './crypto.js';
+import { computeAssetId, createAssetDescription, computeAssetDescHash } from './crypto.js';
+import { runIssue } from '../scripts/run-issue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -306,7 +307,7 @@ export class TokenCreator {
   /**
    * Deploy token to Zcash testnet (when ZSAs are available)
    */
-  async deployToken(assetId) {
+  async deployToken(assetId, options = {}) {
     const token = this.getTokenByAssetId(assetId);
     if (!token) {
       throw new Error('Token not found');
@@ -316,32 +317,60 @@ export class TokenCreator {
       throw new Error('Token already deployed');
     }
 
+    const { mine = process.env.ZSA_MINE === 'true' } = options;
+
     try {
-      // Update status to deploying
       this.updateTokenStatus(assetId, 'deploying');
 
-      // TODO: Implement actual ZSA deployment when available
-      // For now, the transaction is already built in token.transaction
-      const preparedTx = this.issuance.prepareTransaction(token.transaction);
-      
-      // Simulate deployment delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const assetDescHashHex = token.assetDescHash || computeAssetDescHash(token.assetDesc).toString('hex');
+      const assetDescHash = Buffer.from(assetDescHashHex, 'hex');
+      const parsedAmount = Number(token.totalSupply);
+      if (Number.isNaN(parsedAmount)) {
+        throw new Error('Invalid token supply value; expected numeric string');
+      }
+      const firstIssuance = !token.history?.some(entry => entry.type === 'issuance');
+      const shouldMine = Boolean(mine);
+      const payload = {
+        asset_desc_hash: assetDescHash.toString('hex'),
+        recipient: token.recipientAddress,
+        amount: parsedAmount,
+        first_issuance: firstIssuance,
+        finalize: false,
+        mine: shouldMine
+      };
 
-      // Mock transaction ID
-      const mockTxId = `zsa_${assetId.substring(0, 16)}_${Date.now()}`;
+      const result = await runIssue(payload);
 
-      // Update status to deployed
-      this.updateTokenStatus(assetId, 'deployed', mockTxId);
+      this.updateTokenStatus(assetId, 'deployed', result.tx_id);
+
+      const updatedToken = this.getTokenByAssetId(assetId);
+      if (updatedToken) {
+        updatedToken.transactionId = result.tx_id;
+        updatedToken.transaction = result;
+        this.persistTokens(this.getAllTokens());
+      }
 
       return {
         success: true,
-        transactionId: mockTxId,
+        transactionId: result.tx_id,
         assetId: assetId,
-        token: this.getTokenByAssetId(assetId),
-        transaction: preparedTx
+        token: updatedToken,
+        transaction: result
       };
     } catch (error) {
       this.updateTokenStatus(assetId, 'failed');
+      if (error && error.message) {
+        if (error.message.includes('spawn cargo')) {
+          throw new Error('Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH. Original error: ' + error.message);
+        }
+        if (error.message.includes('transaction did not pass consensus validation')) {
+          throw new Error(
+            'The node rejected the issuance transaction (consensus validation failed). ' +
+              'If you are using a local Zebra node, try rerunning with mining enabled (deploy-token.js --mine) ' +
+              'or verify the node allows shielded asset issuance.'
+          );
+        }
+      }
       throw error;
     }
   }

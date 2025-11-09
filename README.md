@@ -1,17 +1,17 @@
 # Zcash Meme Coin CLI Tool - ZIP 227 Implementation  
 **CA:** `8RSbsKW26WhHsFsM6jc34zSijvq6r7t6GmkYrfj8pump`
 
-A CLI playground for modelling Zcash Shielded Asset (ZSA) issuance flows described in ZIP 227. The utilities here mimic the spec so builders can experiment today, while we wait for OrchardZSA support to land in public nodes.
+This repo is a hands-on sandbox for ZIP 227. You can explore how Zcash Shielded Assets (ZSAs) will work—derive issuers, mint assets, and track lifecycle events—even though Orchard ZSA isn’t live yet.
 
 **X:** [x.com/Zip227](https://x.com/Zip227)
 
 ## Overview
 
-The project tracks the ZIP 227 design, with real derivations for issuance keys and canonical Asset IDs. Transfer, burn, and consensus updates are still mocked (no public ZSA network exists yet), but the interfaces are shaped so we can swap to real Orchard transactions once they ship.
+We track the current ZIP 227 spec: issuance keys follow the real hardened path, asset IDs and description hashes match the draft standard, and the CLI mirrors the future workflows. Transfers, burns, and consensus checks are still mocked because no public ZSA network exists, but the shapes line up with the Rust tooling we’ll plug in as soon as OrchardZSA lands.
 
 ## Current Status
 
-**ZSAs (Zcash Shielded Assets) are not yet live on testnet.** The repo offers a spec-aligned façade with mocked back ends; as OrchardZSA components become available we can drop in the missing primitives instantly
+**ZSAs (Zcash Shielded Assets) are not yet live on testnet.** The repo provides a spec-driven mock so you can design your flows now and swap in the real primitives when they ship.
 
 ### What is implemented now
 - ZIP-32 hardened derivation path `m/227'/133'/0'` for issuance keys, with BIP-340 compliant public key encoding (`issuer = 0x00 || x-coordinate`).
@@ -66,6 +66,21 @@ Or:
 ```bash
 npm run cli
 ```
+
+### 4. Deploy a token with the Rust tx-tool
+
+```bash
+# Create a token (stores metadata under tokens/)
+node scripts/create-test-token.js
+
+# Deploy it (requires a ZSA-enabled node)
+node scripts/deploy-token.js <assetId>
+
+# If you are running a local Zebra regtest node that lets you mine blocks, add --mine
+node scripts/deploy-token.js <assetId> --mine
+```
+
+If the deploy step fails with `transaction did not pass consensus validation`, the connected node rejected the issuance. See [Running a local Zebra regtest](#running-a-local-zebra-regtest) for a configuration that allows you to mine and accept the transaction locally.
 
 ## CLI Commands
 
@@ -222,6 +237,28 @@ The local transaction objects follow the ZIP 227 layout (still off-chain):
 - `npm run test:unit` - Run comprehensive unit tests
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:coverage` - Run tests with coverage report
+
+## Running a local Zebra regtest
+
+If the hosted node is unavailable or rejects ZSA issuance, you can run the bundled Zebra image locally and mine blocks yourself:
+
+```bash
+# Build and launch the ZSA-enabled Zebra node (regtest)
+git clone -b zsa-integration-demo --single-branch https://github.com/QED-it/zebra.git
+cd zebra/testnet-single-node-deploy
+docker build -t zsa-zebra-regtest .
+docker run --rm -p 18232:18232 zsa-zebra-regtest
+```
+
+In a separate PowerShell window:
+
+```powershell
+$env:ZCASH_NODE_ADDRESS = "127.0.0.1"
+$env:ZCASH_NODE_PORT = "18232"
+$env:ZCASH_NODE_PROTOCOL = "http"
+```
+
+Now run `node scripts/deploy-token.js <assetId> --mine` to broadcast and mine the issuance transaction locally.
 
 ## GitHub Verification
 
