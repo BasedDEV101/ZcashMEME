@@ -4,6 +4,7 @@ node_modules/
 .DS_Store
 dist/
 build/
+tx-tool/
 *.pdf
 .vscode/
 .idea/

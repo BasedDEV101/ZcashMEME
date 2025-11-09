@@ -4,15 +4,15 @@
   "symbol": "TEST1",
   "description": "Test meme coin",
   "initialSupply": "100000000",
-  "totalSupply": "100000000",
+  "totalSupply": "99999900",
   "issuer": "c7f4faa50a5fd0b141dcfb1fefae1d8c542d739b200ecb9c0d70d1dffe5251d9",
   "assetId": "00c7f4faa50a5fd0b141dcfb1fefae1d8c542d739b200ecb9c0d70d1dffe5251d939c4173813a56069e900c7c8af6e85990050cf82c959691d8ed378fc6dc0c132",
   "assetDescHash": "39c4173813a56069e900c7c8af6e85990050cf82c959691d8ed378fc6dc0c132",
   "assetDesc": "test|test1|Test meme coin",
   "recipientAddress": "zt119eca50e5227ab2929ae1fe9e9c38d",
-  "finalized": false,
+  "finalized": true,
   "network": "zcash-testnet",
-  "status": "pending",
+  "status": "pending_finalization",
   "createdAt": "2025-11-07T17:48:05.932Z",
   "deployedAt": null,
   "transactionId": null,
@@ -41,5 +41,18 @@
     "assetId": "00c7f4faa50a5fd0b141dcfb1fefae1d8c542d739b200ecb9c0d70d1dffe5251d939c4173813a56069e900c7c8af6e85990050cf82c959691d8ed378fc6dc0c132",
     "assetDesc": "test|test1|Test meme coin",
     "finalize": false
-  }
+  },
+  "history": [
+    {
+      "type": "burn",
+      "amount": "100",
+      "recipient": "zt1incinerator0000000000000000000000000000000000000000000000000000000000",
+      "timestamp": "2025-11-09T01:48:50.471Z"
+    },
+    {
+      "type": "finalization",
+      "timestamp": "2025-11-09T01:51:17.783Z"
+    }
+  ],
+  "burnedSupply": "100"
 }

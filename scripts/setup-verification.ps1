@@ -108,3 +108,4 @@ Write-Host "2. Test with: git commit --allow-empty -m 'Test signed commit'"
 Write-Host "3. Push and check on GitHub - commit should show as 'Verified'"
 Write-Host ""
 
+

@@ -105,3 +105,4 @@ echo "2. Test with: git commit --allow-empty -m 'Test signed commit'"
 echo "3. Push and check on GitHub - commit should show as 'Verified'"
 echo ""
 
+
