@@ -68,7 +68,7 @@ describe('Integration Tests', () => {
   test('should create complete token with all ZIP 227 components', async () => {
     // Step 1: Generate keys
     // Preload keys to ensure deterministic issuer
-    tokenCreator.keys.getIssuer();
+    const issuer = tokenCreator.keys.getIssuer();
 
     // Step 2: Create token
     const tokenData = {
@@ -87,7 +87,7 @@ describe('Integration Tests', () => {
     const { assetId } = computeAssetId(token.issuer, assetDesc);
     
     // Verify all components
-    expect(token.issuer).toBe(tokenCreator.keys.getIssuer());
+    expect(token.issuer).toBe(issuer);
     expect(token.assetId).toBe(assetId);
     expect(token.assetDesc).toBe(assetDesc);
     expect(token.name).toBe('PepeCoin');
@@ -97,6 +97,7 @@ describe('Integration Tests', () => {
   });
 
   test('should create multiple tokens with same issuer', async () => {
+    const issuer = tokenCreator.keys.getIssuer();
     const token1 = await tokenCreator.createToken({
       name: 'Token1',
       symbol: 'TKN1',
@@ -112,7 +113,8 @@ describe('Integration Tests', () => {
     });
     
     // Both tokens should have same issuer
-    expect(token1.issuer).toBe(token2.issuer);
+    expect(token1.issuer).toBe(issuer);
+    expect(token2.issuer).toBe(issuer);
     
     // But different asset IDs
     expect(token1.assetId).not.toBe(token2.assetId);

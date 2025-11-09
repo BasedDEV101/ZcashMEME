@@ -8,8 +8,8 @@ import { computeAssetDescHash, computeAssetId, createAssetDescription } from './
 import { IssuanceKeys } from './keys.js';
 
 export class IssuanceTransaction {
-  constructor() {
-    this.keys = new IssuanceKeys();
+  constructor(keys = null) {
+    this.keys = keys || new IssuanceKeys();
   }
 
   /**

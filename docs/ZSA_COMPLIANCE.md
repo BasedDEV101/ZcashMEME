@@ -13,7 +13,7 @@ This project is a staging ground for real Zcash Shielded Asset tooling. The tabl
 | Orchard action groups | ❌ Not implemented | No note commitments, `ρ` derivation, or consensus checks |
 | MAX_ISSUE enforcement | ⚠️ Partial | Checked in tests, but no global state or burn accounting |
 | Finalization consensus rule | ⚠️ Partial | Flag stored locally; not enforced across sessions |
-| Transfer/Burn (ZIP 226) | ❌ Not implemented | CLI commands are stubs with educational messaging |
+| Transfer/Burn (ZIP 226) | ⚠️ Mock | CLI logs transfers and routes burns to an incinerator wallet; no on-chain enforcement yet |
 | GroupHash (`z.cash:OrchardZSA`) | ❌ Not implemented | Needs Pallas/Vesta group hash implementation |
 
 ### Near-term tasks

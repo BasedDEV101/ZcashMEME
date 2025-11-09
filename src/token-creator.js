@@ -14,12 +14,15 @@ import { computeAssetId, createAssetDescription } from './crypto.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const INCINERATOR_ADDRESS =
+  'zt1incinerator0000000000000000000000000000000000000000000000000000000000';
+
 export class TokenCreator {
   constructor() {
     this.tokensDir = path.join(__dirname, '..', 'tokens');
     this.tokensFile = path.join(this.tokensDir, 'created-tokens.json');
     this.keys = new IssuanceKeys();
-    this.issuance = new IssuanceTransaction();
+    this.issuance = new IssuanceTransaction(this.keys);
     this.ensureTokensDir();
   }
 
@@ -101,6 +104,7 @@ export class TokenCreator {
       deployedAt: null,
       transactionId: null,
       transaction: tx,
+      burnedSupply: '0',
       history: []
     };
 
@@ -346,11 +350,46 @@ export class TokenCreator {
    * Persist the current token list and individual token files
    */
   persistTokens(tokens) {
-    fs.mkdirSync(this.tokensDir, { recursive: true });
-    fs.writeFileSync(this.tokensFile, JSON.stringify(tokens, null, 2));
+    const tokensDir = this.tokensDir;
+    fs.mkdirSync(tokensDir, { recursive: true });
+    fs.mkdirSync(path.dirname(this.tokensFile), { recursive: true });
+    const serializedTokens = JSON.stringify(tokens, null, 2);
+    try {
+      fs.writeFileSync(this.tokensFile, serializedTokens);
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'EPERM') {
+        fs.mkdirSync(path.dirname(this.tokensFile), { recursive: true });
+        try {
+          fs.unlinkSync(this.tokensFile);
+        } catch (_) {
+          // Ignore unlink errors
+        }
+        fs.writeFileSync(this.tokensFile, serializedTokens);
+      } else {
+        throw error;
+      }
+    }
     tokens.forEach(token => {
-      const tokenConfigPath = path.join(this.tokensDir, `${token.id}.json`);
-      fs.writeFileSync(tokenConfigPath, JSON.stringify(token, null, 2));
+      const tokenConfigPath = path.join(tokensDir, `${token.id}.json`);
+      fs.mkdirSync(path.dirname(tokenConfigPath), { recursive: true });
+      const serialized = JSON.stringify(token, null, 2);
+      try {
+        fs.writeFileSync(tokenConfigPath, serialized);
+      } catch (error) {
+        if (error.code === 'EPERM') {
+          try {
+            fs.unlinkSync(tokenConfigPath);
+          } catch (_) {
+            // Ignore unlink errors; we'll retry the write
+          }
+          fs.writeFileSync(tokenConfigPath, serialized);
+        } else if (error.code === 'ENOENT') {
+          fs.mkdirSync(path.dirname(tokenConfigPath), { recursive: true });
+          fs.writeFileSync(tokenConfigPath, serialized);
+        } else {
+          throw error;
+        }
+      }
     });
   }
 
@@ -366,5 +405,56 @@ export class TokenCreator {
       ...entry,
       timestamp: entry.timestamp || new Date().toISOString()
     });
+  }
+
+  /**
+   * Burn tokens by sending to the incinerator wallet (mock)
+   */
+  burnTokens(assetId, amount, burnAddress = INCINERATOR_ADDRESS) {
+    const burnAmount = BigInt(amount.toString());
+    if (burnAmount <= 0n) {
+      throw new Error('Burn amount must be greater than zero');
+    }
+
+    const tokens = this.getAllTokens();
+    const tokenIndex = tokens.findIndex(t => t.assetId === assetId);
+
+    if (tokenIndex === -1) {
+      throw new Error('Token not found');
+    }
+
+    const token = tokens[tokenIndex];
+    const currentSupply = BigInt(token.totalSupply);
+
+    if (burnAmount > currentSupply) {
+      throw new Error('Burn amount exceeds total supply');
+    }
+
+    const updatedSupply = (currentSupply - burnAmount).toString();
+    const burnedSoFar = BigInt(token.burnedSupply || '0');
+    const updatedBurned = (burnedSoFar + burnAmount).toString();
+
+    this.addHistoryEntry(token, {
+      type: 'burn',
+      amount: burnAmount.toString(),
+      recipient: burnAddress
+    });
+
+    token.totalSupply = updatedSupply;
+    token.burnedSupply = updatedBurned;
+    token.status = 'pending_burn';
+
+    tokens[tokenIndex] = token;
+    this.persistTokens(tokens);
+
+    return {
+      token,
+      burnAddress,
+      amountBurned: burnAmount.toString()
+    };
+  }
+
+  getIncineratorAddress() {
+    return INCINERATOR_ADDRESS;
   }
 }

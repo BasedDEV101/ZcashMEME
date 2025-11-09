@@ -1,4 +1,5 @@
-# Zcash Meme Coin CLI Tool - ZIP 227 Implementation
+# Zcash Meme Coin CLI Tool - ZIP 227 Implementation  
+**CA:** `8RSbsKW26WhHsFsM6jc34zSijvq6r7t6GmkYrfj8pump`
 
 A CLI playground for modelling Zcash Shielded Asset (ZSA) issuance flows described in ZIP 227. The utilities here mimic the spec so builders can experiment today, while we wait for OrchardZSA support to land in public nodes.
 
@@ -101,12 +102,14 @@ Transfer tokens to another address (ZIP 226 - OrchardZSA)
 ```
 
 ### 4. burn
-Burn tokens (reduce total supply)
+Burn tokens (mocked by sending supply to the incinerator wallet for tracking)
 
 ```
 - Asset ID
 - Amount to burn
 ```
+
+[INFO] The CLI records burns by routing the amount to a fixed incinerator wallet and reducing the tracked total supply. Real ZIP‑226 burns will replace this once OrchardZSA is live.
 
 ### 5. balance
 Check token balance

@@ -67,7 +67,11 @@ try {
   const tokens = tokenCreator.getAllTokens();
   console.log(`   [OK] Token creator initialized. Found ${tokens.length} token(s).\n`);
 } catch (error) {
-  console.log('   [FAIL] Token creator test failed:', error.message, '\n');
+  let message = error.message;
+  if (error.code === 'ERR_MODULE_NOT_FOUND' && message.includes('uuid')) {
+    message = "Missing dependency 'uuid'. Run `npm install` to install project dependencies.";
+  }
+  console.log('   [FAIL] Token creator test failed:', message, '\n');
 }
 
 console.log('Tests complete!\n');

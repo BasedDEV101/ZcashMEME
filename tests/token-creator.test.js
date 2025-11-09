@@ -103,6 +103,7 @@ describe('TokenCreator', () => {
     expect(token.assetId).toBeDefined();
     expect(token.assetDescHash).toBeDefined();
     expect(token.status).toBe('pending');
+    expect(token.burnedSupply).toBe('0');
     expect(token.history).toBeDefined();
     expect(token.history.length).toBe(1);
     expect(token.history[0].type).toBe('creation');
@@ -322,5 +323,27 @@ describe('TokenCreator', () => {
     expect(result.assetId).toBe(token.assetId);
     expect(result.token.status).toBe('deployed');
     expect(result.token.history[result.token.history.length - 1].type).toBe('deployment');
+  });
+
+  test('should burn tokens using incinerator wallet', async () => {
+    const tokenData = {
+      name: 'TestCoin',
+      symbol: 'TEST',
+      initialSupply: '1000000',
+      recipientAddress: 'zt1test123456789'
+    };
+
+    const token = await tokenCreator.createToken(tokenData);
+    const burnResult = tokenCreator.burnTokens(token.assetId, '250000');
+
+    expect(burnResult).toBeDefined();
+    expect(burnResult.amountBurned).toBe('250000');
+    expect(burnResult.burnAddress).toBe(tokenCreator.getIncineratorAddress());
+
+    const updatedToken = tokenCreator.getTokenByAssetId(token.assetId);
+    expect(updatedToken.totalSupply).toBe('750000');
+    expect(updatedToken.burnedSupply).toBe('250000');
+    expect(updatedToken.history[updatedToken.history.length - 1].type).toBe('burn');
+    expect(updatedToken.history[updatedToken.history.length - 1].recipient).toBe(tokenCreator.getIncineratorAddress());
   });
 });

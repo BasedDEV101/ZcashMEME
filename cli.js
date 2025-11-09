@@ -197,8 +197,8 @@ async function cmdTransfer() {
 
 async function cmdBurn() {
   console.log('\n--- Burn Tokens ---\n');
-  console.log('[NOTE] Burn functionality requires ZSAs to be available on testnet.\n');
-  
+  console.log('[NOTE] This mocks a burn by sending supply to the incinerator wallet for tracking purposes.\n');
+
   try {
     const assetId = await question('Asset ID: ');
     if (!assetId.trim()) {
@@ -212,11 +212,22 @@ async function cmdBurn() {
       return;
     }
 
-    console.log('\n[INFO] Burn functionality will be available when ZSAs are deployed.');
-    console.log('[INFO] Burning tokens reduces total supply permanently.');
-    console.log('\nBurn Details:');
-    console.log('Asset ID:', assetId);
-    console.log('Amount to burn:', parseInt(amount).toLocaleString());
+    const burnAmount = BigInt(amount.trim());
+    if (burnAmount <= 0n) {
+      console.log('[ERROR] Burn amount must be greater than zero.');
+      return;
+    }
+
+    const result = tokenCreator.burnTokens(assetId.trim(), burnAmount);
+    const updatedToken = result.token;
+    const incinerator = result.burnAddress;
+
+    console.log('\n[SUCCESS] Burn recorded (mock).');
+    console.log('Asset ID:', updatedToken.assetId);
+    console.log('Burned Amount:', parseInt(result.amountBurned).toLocaleString());
+    console.log('Incinerator Wallet:', incinerator);
+    console.log('New Total Supply:', parseInt(updatedToken.totalSupply).toLocaleString());
+    console.log('Total Burned Supply:', parseInt(updatedToken.burnedSupply || '0').toLocaleString());
   } catch (error) {
     console.error('[ERROR] Error:', error.message);
   }

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "0b1e9582a1d80f407d592e74a356b60a",
+    "name": "test-wallet",
+    "address": "zt119eca50e5227ab2929ae1fe9e9c38d",
+    "type": "sapling",
+    "network": "testnet",
+    "privateKey": "94f1413c73fe9a453729a5921302127ebb43ed297e9f61da213e98cb2006bddb",
+    "createdAt": "2025-11-07T17:48:05.928Z",
+    "balance": "0",
+    "transactions": []
+  }
+]
