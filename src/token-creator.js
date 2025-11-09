@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { IssuanceKeys } from './keys.js';
 import { IssuanceTransaction } from './issuance.js';
 import { computeAssetId, createAssetDescription, computeAssetDescHash } from './crypto.js';
-import { runIssue } from '../scripts/run-issue.js';
+import { runIssue, IssueCommandError } from '../scripts/run-issue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -332,6 +332,7 @@ export class TokenCreator {
       const shouldMine = Boolean(mine);
       const payload = {
         asset_desc_hash: assetDescHash.toString('hex'),
+        asset_name: token.name,
         recipient: token.recipientAddress,
         amount: parsedAmount,
         first_issuance: firstIssuance,
@@ -362,18 +363,39 @@ export class TokenCreator {
       };
     } catch (error) {
       this.updateTokenStatus(assetId, 'failed');
-      if (error && error.message) {
-        if (error.message.includes('spawn cargo')) {
-          throw new Error('Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH. Original error: ' + error.message);
+
+      if (error instanceof IssueCommandError) {
+        if (error.code === 'ISSUE_COMMAND_VALIDATION') {
+          throw new Error(`Issuance validation failed: ${error.message}`);
         }
-        if (error.message.includes('transaction did not pass consensus validation')) {
+
+        if (
+          error.code === 'ISSUE_COMMAND_BROADCAST' &&
+          error.message.includes('transaction did not pass consensus validation')
+        ) {
           throw new Error(
             'The node rejected the issuance transaction (consensus validation failed). ' +
               'If you are using a local Zebra node, try rerunning with mining enabled (deploy-token.js --mine) ' +
               'or verify the node allows shielded asset issuance.'
           );
         }
+
+        if (error.code === 'ISSUE_COMMAND_SPAWN') {
+          throw new Error(
+            'Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH.'
+          );
+        }
+
+        throw new Error(`Issue command failed: ${error.message}`);
       }
+
+      if (error && error.message && error.message.includes('spawn cargo')) {
+        throw new Error(
+          'Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH. Original error: ' +
+            error.message
+        );
+      }
+
       throw error;
     }
   }
