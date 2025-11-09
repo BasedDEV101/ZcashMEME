@@ -11,7 +11,7 @@ The project tracks the ZIP 227 design, with real derivations for issuance keys a
 
 ## Current Status
 
-**ZSAs (Zcash Shielded Assets) are not yet live on testnet.** Today the repo offers a spec-aligned façade with mocked back ends; as OrchardZSA components become available we can drop in the missing primitives.
+**ZSAs (Zcash Shielded Assets) are not yet live on testnet.** The repo offers a spec-aligned façade with mocked back ends; as OrchardZSA components become available we can drop in the missing primitives instantly
 
 ### What is implemented now
 - ZIP-32 hardened derivation path `m/227'/133'/0'` for issuance keys, with BIP-340 compliant public key encoding (`issuer = 0x00 || x-coordinate`).
