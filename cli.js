@@ -218,11 +218,14 @@ async function cmdBurn() {
       return;
     }
 
-    const result = tokenCreator.burnTokens(assetId.trim(), burnAmount);
+    const result = await tokenCreator.burnTokens(assetId.trim(), burnAmount);
     const updatedToken = result.token;
     const incinerator = result.burnAddress;
 
-    console.log('\n[SUCCESS] Burn recorded (mock).');
+    console.log('\n[SUCCESS] Burn request submitted.');
+    if (result.transaction?.broadcast === 'mock') {
+      console.log('[INFO] CLI disabled; burn recorded locally (mock).');
+    }
     console.log('Asset ID:', updatedToken.assetId);
     console.log('Burned Amount:', parseInt(result.amountBurned).toLocaleString());
     console.log('Incinerator Wallet:', incinerator);

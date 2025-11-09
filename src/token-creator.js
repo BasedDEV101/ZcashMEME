@@ -10,7 +10,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { IssuanceKeys } from './keys.js';
 import { IssuanceTransaction } from './issuance.js';
 import { computeAssetId, createAssetDescription, computeAssetDescHash } from './crypto.js';
-import { runIssue, IssueCommandError } from '../scripts/run-issue.js';
+import { runIssue } from '../scripts/run-issue.js';
+import { runTransfer } from '../scripts/run-transfer.js';
+import { runBurn } from '../scripts/run-burn.js';
+import { TxToolCommandError } from '../scripts/tx-tool-command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -318,18 +321,59 @@ export class TokenCreator {
     }
 
     const { mine = process.env.ZSA_MINE === 'true' } = options;
+    const useCli = this.shouldUseCli(options);
+
+    this.updateTokenStatus(assetId, 'deploying');
+
+    const assetDescHashHex =
+      token.assetDescHash || computeAssetDescHash(token.assetDesc).toString('hex');
+    const assetDescHash = Buffer.from(assetDescHashHex, 'hex');
+    const parsedAmount = Number(token.totalSupply);
+
+    if (Number.isNaN(parsedAmount)) {
+      this.updateTokenStatus(assetId, 'failed');
+      throw new Error('Invalid token supply value; expected numeric string');
+    }
+
+    const firstIssuance = !token.history?.some(entry => entry.type === 'deployment');
+    const shouldMine = Boolean(mine);
+
+    if (!useCli) {
+      const txId = `mock-${Date.now().toString(16)}`;
+      this.updateTokenStatus(assetId, 'deployed', txId);
+
+      const updatedToken = this.getTokenByAssetId(assetId);
+      if (updatedToken) {
+        const assetHex =
+          updatedToken.assetBytes ||
+          updatedToken.transaction?.asset ||
+          assetDescHashHex.toLowerCase();
+
+        updatedToken.transactionId = txId;
+        updatedToken.transaction = {
+          tx_id: txId,
+          asset: assetHex,
+          asset_desc_hash: assetDescHashHex.toLowerCase(),
+          amount: parsedAmount,
+          finalized: false,
+          first_issuance: firstIssuance,
+          broadcast: 'mock',
+          recipient: token.recipientAddress,
+        };
+        updatedToken.assetBytes = assetHex;
+        this.persistUpdatedToken(updatedToken);
+      }
+
+      return {
+        success: true,
+        transactionId: txId,
+        assetId,
+        token: updatedToken,
+        transaction: updatedToken?.transaction,
+      };
+    }
 
     try {
-      this.updateTokenStatus(assetId, 'deploying');
-
-      const assetDescHashHex = token.assetDescHash || computeAssetDescHash(token.assetDesc).toString('hex');
-      const assetDescHash = Buffer.from(assetDescHashHex, 'hex');
-      const parsedAmount = Number(token.totalSupply);
-      if (Number.isNaN(parsedAmount)) {
-        throw new Error('Invalid token supply value; expected numeric string');
-      }
-      const firstIssuance = !token.history?.some(entry => entry.type === 'deployment');
-      const shouldMine = Boolean(mine);
       const payload = {
         asset_desc_hash: assetDescHash.toString('hex'),
         asset_name: token.name,
@@ -337,7 +381,7 @@ export class TokenCreator {
         amount: parsedAmount,
         first_issuance: firstIssuance,
         finalize: false,
-        mine: shouldMine
+        mine: shouldMine,
       };
 
       const result = await runIssue(payload);
@@ -351,26 +395,29 @@ export class TokenCreator {
       if (updatedToken) {
         updatedToken.transactionId = result.tx_id;
         updatedToken.transaction = result;
-        this.persistTokens(this.getAllTokens());
+        if (result.asset) {
+          updatedToken.assetBytes = result.asset;
+        }
+        this.persistUpdatedToken(updatedToken);
       }
 
       return {
         success: true,
         transactionId: result.tx_id,
-        assetId: assetId,
+        assetId,
         token: updatedToken,
-        transaction: result
+        transaction: result,
       };
     } catch (error) {
       this.updateTokenStatus(assetId, 'failed');
 
-      if (error instanceof IssueCommandError) {
-        if (error.code === 'ISSUE_COMMAND_VALIDATION') {
+      if (error instanceof TxToolCommandError) {
+        if (error.code === 'TX_TOOL_COMMAND_VALIDATION') {
           throw new Error(`Issuance validation failed: ${error.message}`);
         }
 
         if (
-          error.code === 'ISSUE_COMMAND_BROADCAST' &&
+          error.code === 'TX_TOOL_COMMAND_BROADCAST' &&
           error.message.includes('transaction did not pass consensus validation')
         ) {
           throw new Error(
@@ -380,7 +427,7 @@ export class TokenCreator {
           );
         }
 
-        if (error.code === 'ISSUE_COMMAND_SPAWN') {
+        if (error.code === 'TX_TOOL_COMMAND_SPAWN') {
           throw new Error(
             'Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH.'
           );
@@ -397,6 +444,61 @@ export class TokenCreator {
       }
 
       throw error;
+    }
+  }
+
+  /**
+   * Persist the current token list and individual token files
+   */
+  shouldUseCli(options = {}) {
+    if (Object.prototype.hasOwnProperty.call(options, 'useCli')) {
+      return Boolean(options.useCli);
+    }
+    return process.env.ZSA_USE_CLI !== 'false';
+  }
+
+  getAssetHexForToken(token) {
+    if (!token) {
+      return null;
+    }
+    if (token.assetBytes) {
+      return token.assetBytes;
+    }
+    if (token.transaction?.asset) {
+      return token.transaction.asset;
+    }
+    if (token.assetDescHash) {
+      return token.assetDescHash.toLowerCase();
+    }
+    return null;
+  }
+
+  normalizeRecipientAddress(address) {
+    if (!address) {
+      throw new Error('Recipient address is required');
+    }
+    const trimmed = address.trim();
+    const hex = trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed;
+    if (!/^[0-9a-fA-F]+$/.test(hex)) {
+      throw new Error('Recipient address must be a hex-encoded Orchard raw address');
+    }
+    const lower = hex.toLowerCase();
+    const expectedLength = 86; // 43 raw bytes
+    if (lower.length !== expectedLength) {
+      throw new Error(`Recipient Orchard address must be ${expectedLength} hex characters`);
+    }
+    return lower;
+  }
+
+  persistUpdatedToken(updatedToken) {
+    if (!updatedToken) {
+      return;
+    }
+    const tokens = this.getAllTokens();
+    const index = tokens.findIndex(t => t.assetId === updatedToken.assetId);
+    if (index !== -1) {
+      tokens[index] = updatedToken;
+      this.persistTokens(tokens);
     }
   }
 
@@ -462,50 +564,247 @@ export class TokenCreator {
   }
 
   /**
-   * Burn tokens by sending to the incinerator wallet (mock)
+   * Transfer tokens using the Rust CLI (or fallback mock when CLI is disabled)
    */
-  burnTokens(assetId, amount, burnAddress = INCINERATOR_ADDRESS) {
+  async transferToken(assetId, recipientAddress, amount, options = {}) {
+    const token = this.getTokenByAssetId(assetId);
+    if (!token) {
+      throw new Error('Token not found');
+    }
+
+    const useCli = this.shouldUseCli(options);
+    const numericAmount = Number(amount);
+    if (!Number.isSafeInteger(numericAmount) || numericAmount <= 0) {
+      throw new Error('Transfer amount must be a positive integer');
+    }
+
+    const assetHex = this.getAssetHexForToken(token);
+    if (!assetHex) {
+      throw new Error('Token is missing recorded asset bytes; deploy the token first.');
+    }
+
+    const recipientHex = useCli ? this.normalizeRecipientAddress(recipientAddress) : null;
+    const recipientValue = useCli ? recipientHex : recipientAddress;
+
+    if (!useCli) {
+      const mockTxId = `mock-${Date.now().toString(16)}`;
+      this.addHistoryEntry(token, {
+        type: 'transfer',
+        amount: numericAmount.toString(),
+        recipient: recipientValue,
+        transactionId: mockTxId,
+        broadcast: 'mock',
+      });
+      this.persistUpdatedToken(token);
+      const mockResult = {
+        tx_id: mockTxId,
+        asset: assetHex,
+        amount: numericAmount,
+        broadcast: 'mock',
+        recipient: recipientValue,
+      };
+      return {
+        success: true,
+        transactionId: mockTxId,
+        assetId,
+        token,
+        transaction: mockResult,
+      };
+    }
+
+    try {
+      const payload = {
+        asset: assetHex,
+        recipient: recipientHex,
+        amount: numericAmount,
+        mine: Boolean(options.mine),
+      };
+
+      const result = await runTransfer(payload);
+      if (!result || !result.tx_id) {
+        throw new Error('Transfer command did not return a transaction id; aborting transfer.');
+      }
+
+      this.addHistoryEntry(token, {
+        type: 'transfer',
+        amount: numericAmount.toString(),
+        recipient: recipientValue,
+        transactionId: result.tx_id,
+      });
+
+      this.persistUpdatedToken(token);
+
+      return {
+        success: true,
+        transactionId: result.tx_id,
+        assetId,
+        token,
+        transaction: result,
+      };
+    } catch (error) {
+      this.addHistoryEntry(token, {
+        type: 'transfer_failed',
+        amount: numericAmount.toString(),
+        recipient: recipientValue,
+        error: error?.message,
+      });
+      this.persistUpdatedToken(token);
+
+      if (error instanceof TxToolCommandError) {
+        if (error.code === 'TX_TOOL_COMMAND_VALIDATION') {
+          throw new Error(`Transfer validation failed: ${error.message}`);
+        }
+        if (error.code === 'TX_TOOL_COMMAND_SPAWN') {
+          throw new Error(
+            'Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH.'
+          );
+        }
+        throw new Error(`Transfer command failed: ${error.message}`);
+      }
+
+      if (error && error.message && error.message.includes('spawn cargo')) {
+        throw new Error(
+          'Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH. Original error: ' +
+            error.message
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Burn tokens by sending to the incinerator wallet
+   */
+  async burnTokens(assetId, amount, options = {}) {
+    const token = this.getTokenByAssetId(assetId);
+    if (!token) {
+      throw new Error('Token not found');
+    }
+
     const burnAmount = BigInt(amount.toString());
     if (burnAmount <= 0n) {
       throw new Error('Burn amount must be greater than zero');
     }
 
-    const tokens = this.getAllTokens();
-    const tokenIndex = tokens.findIndex(t => t.assetId === assetId);
-
-    if (tokenIndex === -1) {
-      throw new Error('Token not found');
+    const assetHex = this.getAssetHexForToken(token);
+    if (!assetHex) {
+      throw new Error('Token is missing recorded asset bytes; deploy the token first.');
     }
 
-    const token = tokens[tokenIndex];
     const currentSupply = BigInt(token.totalSupply);
-
     if (burnAmount > currentSupply) {
       throw new Error('Burn amount exceeds total supply');
     }
 
-    const updatedSupply = (currentSupply - burnAmount).toString();
-    const burnedSoFar = BigInt(token.burnedSupply || '0');
-    const updatedBurned = (burnedSoFar + burnAmount).toString();
+    const useCli = this.shouldUseCli(options);
+    const burnAddress = options.burnAddress || INCINERATOR_ADDRESS;
+    const shouldMine = Boolean(options.mine);
 
-    this.addHistoryEntry(token, {
-      type: 'burn',
-      amount: burnAmount.toString(),
-      recipient: burnAddress
-    });
+    if (!useCli) {
+      const updatedSupply = (currentSupply - burnAmount).toString();
+      const burnedSoFar = BigInt(token.burnedSupply || '0');
+      const updatedBurned = (burnedSoFar + burnAmount).toString();
+      const mockTxId = `mock-${Date.now().toString(16)}`;
 
-    token.totalSupply = updatedSupply;
-    token.burnedSupply = updatedBurned;
-    token.status = 'pending_burn';
+      this.addHistoryEntry(token, {
+        type: 'burn',
+        amount: burnAmount.toString(),
+        recipient: burnAddress,
+        transactionId: mockTxId,
+        broadcast: 'mock',
+      });
 
-    tokens[tokenIndex] = token;
-    this.persistTokens(tokens);
+      token.totalSupply = updatedSupply;
+      token.burnedSupply = updatedBurned;
+      token.status = 'deployed';
 
-    return {
-      token,
-      burnAddress,
-      amountBurned: burnAmount.toString()
-    };
+      this.persistUpdatedToken(token);
+
+      return {
+        success: true,
+        transactionId: mockTxId,
+        assetId,
+        token,
+        transaction: {
+          tx_id: mockTxId,
+          asset: assetHex,
+          amount: Number(burnAmount),
+          broadcast: 'mock',
+        },
+        burnAddress,
+        amountBurned: burnAmount.toString(),
+      };
+    }
+
+    try {
+      const payload = {
+        asset: assetHex,
+        amount: Number(burnAmount),
+        mine: shouldMine,
+      };
+
+      const result = await runBurn(payload);
+      if (!result || !result.tx_id) {
+        throw new Error('Burn command did not return a transaction id; aborting burn.');
+      }
+
+      const updatedSupply = (currentSupply - burnAmount).toString();
+      const burnedSoFar = BigInt(token.burnedSupply || '0');
+      const updatedBurned = (burnedSoFar + burnAmount).toString();
+
+      this.addHistoryEntry(token, {
+        type: 'burn',
+        amount: burnAmount.toString(),
+        recipient: burnAddress,
+        transactionId: result.tx_id,
+      });
+
+      token.totalSupply = updatedSupply;
+      token.burnedSupply = updatedBurned;
+      token.status = 'deployed';
+
+      this.persistUpdatedToken(token);
+
+      return {
+        success: true,
+        transactionId: result.tx_id,
+        assetId,
+        token,
+        transaction: result,
+        burnAddress,
+        amountBurned: burnAmount.toString(),
+      };
+    } catch (error) {
+      this.addHistoryEntry(token, {
+        type: 'burn_failed',
+        amount: burnAmount.toString(),
+        recipient: burnAddress,
+        error: error?.message,
+      });
+      this.persistUpdatedToken(token);
+
+      if (error instanceof TxToolCommandError) {
+        if (error.code === 'TX_TOOL_COMMAND_VALIDATION') {
+          throw new Error(`Burn validation failed: ${error.message}`);
+        }
+        if (error.code === 'TX_TOOL_COMMAND_SPAWN') {
+          throw new Error(
+            'Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH.'
+          );
+        }
+        throw new Error(`Burn command failed: ${error.message}`);
+      }
+
+      if (error && error.message && error.message.includes('spawn cargo')) {
+        throw new Error(
+          'Failed to execute `cargo`. Ensure Rust is installed and `cargo` is available on the PATH. Original error: ' +
+            error.message
+        );
+      }
+
+      throw error;
+    }
   }
 
   getIncineratorAddress() {

@@ -316,7 +316,7 @@ describe('TokenCreator', () => {
     };
     
     const token = await tokenCreator.createToken(tokenData);
-    const result = await tokenCreator.deployToken(token.assetId);
+    const result = await tokenCreator.deployToken(token.assetId, { useCli: false });
     
     expect(result.success).toBe(true);
     expect(result.transactionId).toBeDefined();
@@ -334,7 +334,7 @@ describe('TokenCreator', () => {
     };
 
     const token = await tokenCreator.createToken(tokenData);
-    const burnResult = tokenCreator.burnTokens(token.assetId, '250000');
+    const burnResult = await tokenCreator.burnTokens(token.assetId, '250000', { useCli: false });
 
     expect(burnResult).toBeDefined();
     expect(burnResult.amountBurned).toBe('250000');
