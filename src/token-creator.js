@@ -328,7 +328,7 @@ export class TokenCreator {
       if (Number.isNaN(parsedAmount)) {
         throw new Error('Invalid token supply value; expected numeric string');
       }
-      const firstIssuance = !token.history?.some(entry => entry.type === 'issuance');
+      const firstIssuance = !token.history?.some(entry => entry.type === 'deployment');
       const shouldMine = Boolean(mine);
       const payload = {
         asset_desc_hash: assetDescHash.toString('hex'),
@@ -340,6 +340,9 @@ export class TokenCreator {
       };
 
       const result = await runIssue(payload);
+      if (!result || !result.tx_id) {
+        throw new Error('Issue command did not return a transaction id; aborting deployment.');
+      }
 
       this.updateTokenStatus(assetId, 'deployed', result.tx_id);
 

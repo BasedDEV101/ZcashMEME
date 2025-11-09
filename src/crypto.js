@@ -4,28 +4,53 @@
  */
 
 import crypto from 'crypto';
-import { createHash } from 'crypto';
+import { blake2b } from '@noble/hashes/blake2.js';
+import { utf8ToBytes } from '@noble/hashes/utils.js';
+
+function ensurePersonalization(personalization) {
+  if (!personalization) {
+    return undefined;
+  }
+
+  if (typeof personalization === 'string') {
+    const bytes = utf8ToBytes(personalization);
+    if (bytes.length !== 16) {
+      throw new Error(`BLAKE2b personalization must be 16 bytes, got ${bytes.length}`);
+    }
+    return bytes;
+  }
+
+  if (personalization.length !== 16) {
+    throw new Error(`BLAKE2b personalization must be 16 bytes, got ${personalization.length}`);
+  }
+
+  return personalization;
+}
 
 /**
  * BLAKE2b-256 hash
  * ZIP 227 uses BLAKE2b-256 for asset description hashing
  */
-export function blake2b256(data) {
-  // Node.js crypto doesn't have BLAKE2b built-in, so we use SHA-256 as a placeholder
-  // In production, use a proper BLAKE2b library like 'blake2' npm package
-  const hash = crypto.createHash('sha256');
-  hash.update(data);
-  return hash.digest();
+export function blake2b256(data, personalization) {
+  return Buffer.from(
+    blake2b(data, {
+      dkLen: 32,
+      personalization: ensurePersonalization(personalization)
+    })
+  );
 }
 
 /**
  * BLAKE2b-512 hash
  * Used for asset digest calculation
  */
-export function blake2b512(data) {
-  const hash = crypto.createHash('sha512');
-  hash.update(data);
-  return hash.digest();
+export function blake2b512(data, personalization) {
+  return Buffer.from(
+    blake2b(data, {
+      dkLen: 64,
+      personalization: ensurePersonalization(personalization)
+    })
+  );
 }
 
 /**
@@ -33,12 +58,7 @@ export function blake2b512(data) {
  * ZIP 227: asset_desc_hash = BLAKE2b-256("ZSA-AssetDescCRH", asset_desc)
  */
 export function computeAssetDescHash(assetDesc) {
-  const domain = 'ZSA-AssetDescCRH';
-  const data = Buffer.concat([
-    Buffer.from(domain, 'utf8'),
-    Buffer.from(assetDesc, 'utf8')
-  ]);
-  return blake2b256(data);
+  return blake2b256(Buffer.from(assetDesc, 'utf8'), 'ZSA-AssetDescCRH');
 }
 
 /**
@@ -69,13 +89,8 @@ export function computeAssetId(issuer, assetDesc) {
  * ZIP 227: asset_digest = BLAKE2b-512("ZSA-Asset-Digest", encode_asset_id(asset_id))
  */
 export function computeAssetDigest(assetId) {
-  const domain = 'ZSA-Asset-Digest';
   const assetIdBuffer = Buffer.from(assetId, 'hex');
-  const data = Buffer.concat([
-    Buffer.from(domain, 'utf8'),
-    assetIdBuffer
-  ]);
-  return blake2b512(data);
+  return blake2b512(assetIdBuffer, 'ZSA-Asset-Digest');
 }
 
 /**

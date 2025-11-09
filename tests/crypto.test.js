@@ -18,17 +18,19 @@ describe('Cryptographic Utilities', () => {
   test('should compute BLAKE2b-256 hash', () => {
     const data = Buffer.from('test data');
     const hash = blake2b256(data);
-    
+
     expect(hash).toBeDefined();
     expect(hash.length).toBe(32); // 256 bits = 32 bytes
+    expect(hash.toString('hex')).toBe('eab94977a17791d0c089fe9e393261b3ab667cf0e8456632a842d905c468cf65');
   });
 
   test('should compute BLAKE2b-512 hash', () => {
     const data = Buffer.from('test data');
     const hash = blake2b512(data);
-    
+
     expect(hash).toBeDefined();
     expect(hash.length).toBe(64); // 512 bits = 64 bytes
+    expect(hash.toString('hex')).toBe('21bae505e9cd790bd374e387886738653270888d2b6e0753a1d6ff29b56a30491a7531ae2ec30a75b7446f5e16acb504f8cad64b51e6b6c6f8894368748a3f6b');
   });
 
   test('should compute asset description hash', () => {
@@ -38,6 +40,7 @@ describe('Cryptographic Utilities', () => {
     expect(hash).toBeDefined();
     expect(Buffer.isBuffer(hash)).toBe(true);
     expect(hash.length).toBe(32);
+    expect(hash.toString('hex')).toBe('54484bf7c320afe6dc3a13003495976a16a1f36bbb331eed2cb839137355160a');
   });
 
   test('should compute same hash for same asset description', () => {
@@ -98,6 +101,7 @@ describe('Cryptographic Utilities', () => {
     expect(digest).toBeDefined();
     expect(Buffer.isBuffer(digest)).toBe(true);
     expect(digest.length).toBe(64); // 512 bits = 64 bytes
+    expect(digest.toString('hex')).toBe('809f2fd5eaf3f0f607983f0496505d9a3d135a65259897a8788323689b730a89a8a6368e90d87d1b7e7f777ac5ca046abbf3b07f2a5692ff04ab7d0656a52223');
   });
 
   test('should compute asset base', () => {
