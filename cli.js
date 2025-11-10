@@ -30,17 +30,18 @@ function question(prompt) {
 function displayMenu() {
   console.log('\n=== Zcash Meme Coin CLI Tool (ZIP 227) ===\n');
   console.log('1. create-token    - Create a new meme coin');
-  console.log('2. issue-more      - Issue additional tokens (if not finalized)');
-  console.log('3. transfer        - Send tokens to another address');
-  console.log('4. burn            - Burn tokens');
-  console.log('5. balance         - Check token balance');
-  console.log('6. list-assets     - List all your created assets');
-  console.log('7. info            - Get asset information');
-  console.log('8. finalize        - Finalize token (prevent further issuance)');
-  console.log('9. create-wallet   - Create a new Zcash wallet');
-  console.log('10. list-wallets   - List all wallets');
-  console.log('11. check-onchain  - Check if token exists on blockchain');
-  console.log('12. exit           - Exit CLI');
+  console.log('2. deploy          - Deploy token to Zcash testnet');
+  console.log('3. issue-more      - Issue additional tokens (if not finalized)');
+  console.log('4. transfer        - Send tokens to another address');
+  console.log('5. burn            - Burn tokens');
+  console.log('6. balance         - Check token balance');
+  console.log('7. list-assets     - List all your created assets');
+  console.log('8. info            - Get asset information');
+  console.log('9. finalize        - Finalize token (prevent further issuance)');
+  console.log('10. create-wallet   - Create a new Zcash wallet');
+  console.log('11. list-wallets   - List all wallets');
+  console.log('12. check-onchain  - Check if token exists on blockchain');
+  console.log('13. exit           - Exit CLI');
   console.log('');
 }
 
@@ -126,6 +127,56 @@ async function cmdCreateToken() {
   }
 }
 
+async function cmdDeploy() {
+  console.log('\n--- Deploy Token to Zcash Testnet ---\n');
+  console.log('[NOTE] Deployment requires ZSAs to be available on testnet.');
+  console.log('[NOTE] This will use the Rust CLI to issue the token on-chain.\n');
+
+  try {
+    const assetId = await question('Asset ID: ');
+    if (!assetId.trim()) {
+      console.log('[ERROR] Asset ID is required.');
+      return;
+    }
+
+    const token = tokenCreator.getTokenByAssetId(assetId.trim());
+    if (!token) {
+      console.log('[ERROR] Token not found.');
+      return;
+    }
+
+    if (token.status === 'deployed') {
+      console.log('[INFO] Token is already deployed.');
+      console.log('Transaction ID:', token.transactionId || 'N/A');
+      return;
+    }
+
+    const useCli = await question('Use Rust CLI for real deployment? (yes/no, default: yes): ');
+    const useCliFlag = useCli.toLowerCase() !== 'no';
+
+    const mine = await question('Mine the transaction? (yes/no, default: no): ');
+    const mineFlag = mine.toLowerCase() === 'yes';
+
+    console.log('\n[INFO] Deploying token...');
+    const result = await tokenCreator.deployToken(assetId.trim(), {
+      useCli: useCliFlag,
+      mine: mineFlag
+    });
+
+    console.log('\n[SUCCESS] Token deployed!');
+    if (result.transaction?.tx_id) {
+      console.log('Transaction ID:', result.transaction.tx_id);
+      console.log('Asset:', result.transaction.asset || 'N/A');
+      console.log('Broadcast status:', result.transaction.broadcast || 'N/A');
+    }
+    console.log('Asset ID:', result.assetId);
+    console.log('Token:', result.token.name, '(', result.token.symbol, ')');
+    console.log('Status:', result.token.status);
+  } catch (error) {
+    console.error('[ERROR] Deployment failed:', error.message);
+  }
+}
+
 async function cmdIssueMore() {
   console.log('\n--- Issue More Tokens ---\n');
   
@@ -172,6 +223,12 @@ async function cmdTransfer() {
       return;
     }
 
+    const token = tokenCreator.getTokenByAssetId(assetId.trim());
+    if (!token) {
+      console.log('[ERROR] Token not found.');
+      return;
+    }
+
     const toAddress = await question('Recipient Zcash Address (z-addr): ');
     if (!toAddress.trim()) {
       console.log('[ERROR] Recipient address is required.');
@@ -184,11 +241,31 @@ async function cmdTransfer() {
       return;
     }
 
-    console.log('\n[INFO] Transfer functionality will be available when ZSAs are deployed.');
-    console.log('[INFO] Transfer would use ZIP 226 (OrchardZSA protocol).');
-    console.log('\nTransfer Details:');
-    console.log('Asset ID:', assetId);
-    console.log('To:', toAddress);
+    const numericAmount = BigInt(amount.trim());
+    if (numericAmount <= 0n) {
+      console.log('[ERROR] Transfer amount must be greater than zero.');
+      return;
+    }
+
+    const useCli = await question('Use Rust CLI for real transfer? (yes/no, default: no): ');
+    const useCliFlag = useCli.toLowerCase() === 'yes';
+
+    console.log('\n[INFO] Processing transfer...');
+    const result = await tokenCreator.transferToken(
+      assetId.trim(),
+      toAddress.trim(),
+      numericAmount.toString(),
+      { useCli: useCliFlag, mine: process.env.ZSA_MINE === 'true' }
+    );
+
+    console.log('\n[SUCCESS] Transfer completed.');
+    if (result.transaction?.broadcast === 'mock') {
+      console.log('[INFO] CLI disabled; transfer recorded locally (mock).');
+    } else if (result.transaction?.tx_id) {
+      console.log('[INFO] Transaction ID:', result.transaction.tx_id);
+    }
+    console.log('Asset ID:', result.token.assetId);
+    console.log('Recipient:', toAddress.trim());
     console.log('Amount:', parseInt(amount).toLocaleString());
   } catch (error) {
     console.error('[ERROR] Error:', error.message);
@@ -197,12 +274,19 @@ async function cmdTransfer() {
 
 async function cmdBurn() {
   console.log('\n--- Burn Tokens ---\n');
-  console.log('[NOTE] This mocks a burn by sending supply to the incinerator wallet for tracking purposes.\n');
+  console.log('[NOTE] Burn functionality requires ZSAs to be available on testnet.');
+  console.log('[NOTE] This will use ZIP 226 (OrchardZSA) for burns.\n');
 
   try {
     const assetId = await question('Asset ID: ');
     if (!assetId.trim()) {
       console.log('[ERROR] Asset ID is required.');
+      return;
+    }
+
+    const token = tokenCreator.getTokenByAssetId(assetId.trim());
+    if (!token) {
+      console.log('[ERROR] Token not found.');
       return;
     }
 
@@ -218,19 +302,28 @@ async function cmdBurn() {
       return;
     }
 
-    const result = await tokenCreator.burnTokens(assetId.trim(), burnAmount);
-    const updatedToken = result.token;
-    const incinerator = result.burnAddress;
+    const useCli = await question('Use Rust CLI for real burn? (yes/no, default: no): ');
+    const useCliFlag = useCli.toLowerCase() === 'yes';
 
-    console.log('\n[SUCCESS] Burn request submitted.');
+    console.log('\n[INFO] Processing burn...');
+    const result = await tokenCreator.burnTokens(
+      assetId.trim(),
+      burnAmount.toString(),
+      undefined,
+      { useCli: useCliFlag, mine: process.env.ZSA_MINE === 'true' }
+    );
+
+    console.log('\n[SUCCESS] Burn completed.');
     if (result.transaction?.broadcast === 'mock') {
       console.log('[INFO] CLI disabled; burn recorded locally (mock).');
+    } else if (result.transaction?.tx_id) {
+      console.log('[INFO] Transaction ID:', result.transaction.tx_id);
     }
-    console.log('Asset ID:', updatedToken.assetId);
+    console.log('Asset ID:', result.token.assetId);
     console.log('Burned Amount:', parseInt(result.amountBurned).toLocaleString());
-    console.log('Incinerator Wallet:', incinerator);
-    console.log('New Total Supply:', parseInt(updatedToken.totalSupply).toLocaleString());
-    console.log('Total Burned Supply:', parseInt(updatedToken.burnedSupply || '0').toLocaleString());
+    console.log('Incinerator Wallet:', result.burnAddress);
+    console.log('New Total Supply:', parseInt(result.token.totalSupply).toLocaleString());
+    console.log('Total Burned Supply:', parseInt(result.token.burnedSupply || '0').toLocaleString());
   } catch (error) {
     console.error('[ERROR] Error:', error.message);
   }
@@ -522,49 +615,52 @@ async function main() {
 
     while (true) {
     displayMenu();
-    const choice = await question('Select command (1-12): ');
+    const choice = await question('Select command (1-13): ');
 
     switch (choice.trim()) {
       case '1':
         await cmdCreateToken();
         break;
       case '2':
-        await cmdIssueMore();
+        await cmdDeploy();
         break;
       case '3':
-        await cmdTransfer();
+        await cmdIssueMore();
         break;
       case '4':
-        await cmdBurn();
+        await cmdTransfer();
         break;
       case '5':
-        await cmdBalance();
+        await cmdBurn();
         break;
       case '6':
-        await cmdListAssets();
+        await cmdBalance();
         break;
       case '7':
-        await cmdInfo();
+        await cmdListAssets();
         break;
       case '8':
-        await cmdFinalize();
+        await cmdInfo();
         break;
       case '9':
-        await cmdCreateWallet();
+        await cmdFinalize();
         break;
       case '10':
-        await cmdListWallets();
+        await cmdCreateWallet();
         break;
       case '11':
-        await cmdCheckOnChain();
+        await cmdListWallets();
         break;
       case '12':
+        await cmdCheckOnChain();
+        break;
+      case '13':
         console.log('\nGoodbye!');
         rl.close();
         process.exit(0);
         break;
       default:
-        console.log('\n[ERROR] Invalid option. Please select 1-12.');
+        console.log('\n[ERROR] Invalid option. Please select 1-13.');
     }
   }
 }
