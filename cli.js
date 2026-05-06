@@ -309,7 +309,6 @@ async function cmdBurn() {
     const result = await tokenCreator.burnTokens(
       assetId.trim(),
       burnAmount.toString(),
-      undefined,
       { useCli: useCliFlag, mine: process.env.ZSA_MINE === 'true' }
     );
 

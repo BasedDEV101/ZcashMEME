@@ -13,8 +13,8 @@ const __dirname = path.dirname(__filename);
 
 describe('TokenCreator', () => {
   let tokenCreator;
-  const testTokensDir = path.join(__dirname, '..', 'test-tokens');
-  const testKeysDir = path.join(__dirname, '..', 'test-keys');
+  const testTokensDir = path.join(__dirname, '..', 'test-tokens-creator');
+  const testKeysDir = path.join(__dirname, '..', 'test-keys-creator');
 
   beforeEach(() => {
     // Clean up test directories with retry logic for Windows

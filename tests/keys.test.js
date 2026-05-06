@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 
 describe('IssuanceKeys', () => {
   let keys;
-  const testKeysDir = path.join(__dirname, '..', 'test-keys');
+  const testKeysDir = path.join(__dirname, '..', 'test-keys-keys');
 
   beforeEach(() => {
     // Clean up test keys directory

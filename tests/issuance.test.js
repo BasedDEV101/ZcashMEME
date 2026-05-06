@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 
 describe('IssuanceTransaction', () => {
   let issuance;
-  const testKeysDir = path.join(__dirname, '..', 'test-keys');
+  const testKeysDir = path.join(__dirname, '..', 'test-keys-issuance');
 
   beforeEach(() => {
     const cleanup = (dir) => {
