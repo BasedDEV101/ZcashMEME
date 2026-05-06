@@ -15,27 +15,46 @@ export class ZcashClient {
    * Make RPC call to Zcash node
    */
   async rpcCall(method, params = []) {
-    try {
-      const response = await fetch(this.rpcUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${Buffer.from(`${this.rpcUser}:${this.rpcPassword}`).toString('base64')}`
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: method,
-          params: params
-        })
-      });
-
-      const data = await response.json();
-      return data.result;
-    } catch (error) {
-      console.error('RPC call failed:', error);
-      throw error;
+    if (!this.rpcUser || !this.rpcPassword) {
+      throw new Error(
+        'Zcash RPC credentials not configured. Set ZCASH_TESTNET_RPC_USER and ZCASH_TESTNET_RPC_PASSWORD env vars or pass rpcUser/rpcPassword in the config.'
+      );
     }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Basic ${Buffer.from(`${this.rpcUser}:${this.rpcPassword}`).toString('base64')}`
+    };
+
+    let response;
+    try {
+      response = await fetch(this.rpcUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+      });
+    } catch (error) {
+      throw new Error(`Zcash RPC network error calling ${method} at ${this.rpcUrl}: ${error.message}`);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Zcash RPC HTTP ${response.status} from ${this.rpcUrl} for method ${method}`);
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      throw new Error(`Zcash RPC returned non-JSON response for ${method}: ${error.message}`);
+    }
+
+    if (data.error) {
+      const code = data.error.code ?? 'unknown';
+      const message = data.error.message ?? JSON.stringify(data.error);
+      throw new Error(`Zcash RPC ${method} returned error (code ${code}): ${message}`);
+    }
+
+    return data.result;
   }
 
   /**

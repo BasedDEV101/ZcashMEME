@@ -179,7 +179,8 @@ zcash-meme-coin/
 │   ├── crypto.js           # Cryptographic utilities (BLAKE2b, Asset ID)
 │   ├── issuance.js         # Issuance transaction building
 │   ├── token-creator.js    # Token creation service
-│   ├── token-manager.js    # Token management logic
+│   ├── wallet.js           # Wallet generation and storage
+│   ├── zcash-blockchain.js # On-chain status queries
 │   └── zcash-client.js     # Zcash RPC client
 ├── tokens/                 # Created tokens storage (gitignored)
 ├── keys/                   # Issuance keys storage (gitignored)

@@ -72,8 +72,7 @@ npm run test:coverage
 - **token-creator.js**: 88.28% coverage
 
 ### Areas Not Covered
-- **token-manager.js**: Legacy module (not used in ZIP 227 implementation)
-- **zcash-client.js**: Requires Zcash node connection (integration testing)
+- **zcash-blockchain.js**: Stubbed methods awaiting ZSAs on testnet
 
 ## Test Data
 

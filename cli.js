@@ -241,7 +241,13 @@ async function cmdTransfer() {
       return;
     }
 
-    const numericAmount = BigInt(amount.trim());
+    let numericAmount;
+    try {
+      numericAmount = BigInt(amount.trim());
+    } catch (_) {
+      console.log('[ERROR] Transfer amount must be a positive integer.');
+      return;
+    }
     if (numericAmount <= 0n) {
       console.log('[ERROR] Transfer amount must be greater than zero.');
       return;
@@ -296,7 +302,13 @@ async function cmdBurn() {
       return;
     }
 
-    const burnAmount = BigInt(amount.trim());
+    let burnAmount;
+    try {
+      burnAmount = BigInt(amount.trim());
+    } catch (_) {
+      console.log('[ERROR] Burn amount must be a positive integer.');
+      return;
+    }
     if (burnAmount <= 0n) {
       console.log('[ERROR] Burn amount must be greater than zero.');
       return;

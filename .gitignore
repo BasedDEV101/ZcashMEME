@@ -20,7 +20,9 @@ test-tokens/
 test-tokens-*/
 test-keys/
 test-keys-*/
+test-wallets-*/
 .claude/
+.gh-auth.log
 coverage/
 *.test.js.map
 *.lcov

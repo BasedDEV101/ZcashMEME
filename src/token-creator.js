@@ -238,11 +238,19 @@ export class TokenCreator {
    * Get all created tokens
    */
   getAllTokens() {
+    let data;
     try {
-      const data = fs.readFileSync(this.tokensFile, 'utf8');
+      data = fs.readFileSync(this.tokensFile, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return [];
+      }
+      throw error;
+    }
+    try {
       return JSON.parse(data);
     } catch (error) {
-      return [];
+      throw new Error(`Tokens file at ${this.tokensFile} is corrupted: ${error.message}`);
     }
   }
 

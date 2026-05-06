@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import secp256k1 from 'secp256k1';
+import { serializeSecret, deserializeSecret } from './secret-storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -147,8 +148,8 @@ export class IssuanceKeys {
 
     if (fs.existsSync(this.keysFile)) {
       try {
-        const keysData = JSON.parse(fs.readFileSync(this.keysFile, 'utf8'));
-        if (keysData.issuer && keysData.issuer.length === 66) {
+        const keysData = deserializeSecret(fs.readFileSync(this.keysFile, 'utf8'));
+        if (keysData && keysData.issuer && keysData.issuer.length === 66) {
           return keysData;
         }
         loadedKeys = keysData;
@@ -161,7 +162,7 @@ export class IssuanceKeys {
 
       if (loadedKeys) {
         const upgraded = this.upgradeLegacyKeys(loadedKeys);
-        fs.writeFileSync(this.keysFile, JSON.stringify(upgraded, null, 2));
+        fs.writeFileSync(this.keysFile, serializeSecret(upgraded));
         return upgraded;
       }
     }
@@ -185,14 +186,15 @@ export class IssuanceKeys {
       createdAt: new Date().toISOString()
     };
 
-    // Save keys (in production, encrypt this!)
+    // Save keys (encrypted at rest if ZCASH_KEY_PASSPHRASE is set)
     fs.mkdirSync(path.dirname(this.keysFile), { recursive: true });
+    const serialized = serializeSecret(keysData);
     try {
-      fs.writeFileSync(this.keysFile, JSON.stringify(keysData, null, 2));
+      fs.writeFileSync(this.keysFile, serialized);
     } catch (error) {
       if (error.code === 'ENOENT') {
         this.ensureKeysDir();
-        fs.writeFileSync(this.keysFile, JSON.stringify(keysData, null, 2));
+        fs.writeFileSync(this.keysFile, serialized);
       } else {
         throw error;
       }

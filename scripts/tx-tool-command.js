@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+
+const TX_TOOL_CWD = process.env.ZCASH_TX_TOOL_DIR || 'tx-tool';
 
 export class TxToolCommandError extends Error {
   constructor(message, { code = 'TX_TOOL_COMMAND_FAILED', details } = {}) {
@@ -72,10 +74,20 @@ export function runTxToolCommand({
     );
   }
 
+  const cwd = resolve(TX_TOOL_CWD);
+  if (!existsSync(cwd)) {
+    return Promise.reject(
+      new TxToolCommandError(
+        `tx-tool directory not found at ${cwd}. Set ZCASH_TX_TOOL_DIR env var to point at a valid Rust tx-tool checkout, or clone one to ./tx-tool.`,
+        { code: 'TX_TOOL_COMMAND_MISSING_CWD' },
+      ),
+    );
+  }
+
   const filePath = join(tmpdir(), `${subcommand}-${Date.now()}.json`);
   writeFileSync(filePath, JSON.stringify(payload));
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolvePromise, reject) => {
     const child = spawn(
       'cargo',
       [
@@ -91,7 +103,7 @@ export function runTxToolCommand({
         ...extraArgs,
       ],
       {
-        cwd: 'tx-tool',
+        cwd,
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
@@ -171,7 +183,7 @@ export function runTxToolCommand({
 
       try {
         const result = JSON.parse(jsonString);
-        resolve(result);
+        resolvePromise(result);
       } catch (parseErr) {
         reject(
           new TxToolCommandError(

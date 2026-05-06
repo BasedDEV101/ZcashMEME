@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { serializeSecret, deserializeSecret } from './secret-storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,7 @@ export class WalletManager {
       fs.mkdirSync(this.walletsDir, { recursive: true });
     }
     if (!fs.existsSync(this.walletsFile)) {
-      fs.writeFileSync(this.walletsFile, JSON.stringify([], null, 2));
+      fs.writeFileSync(this.walletsFile, serializeSecret([]));
     }
   }
 
@@ -32,12 +33,13 @@ export class WalletManager {
    * Note: This generates a mock address format. In production, use proper Zcash address generation.
    */
   generateAddress(type = 'sapling') {
-    // Generate random address (mock implementation)
-    // In production, use proper Zcash address generation library
+    if (type !== 'sapling' && type !== 'orchard') {
+      throw new Error(`Unsupported address type: ${type}. Must be 'sapling' or 'orchard'.`);
+    }
     const randomBytes = crypto.randomBytes(20);
-    const prefix = type === 'sapling' ? 'zt' : 'zt';
+    const prefix = type === 'sapling' ? 'zt' : 'zo';
     const address = prefix + '1' + randomBytes.toString('hex').substring(0, 30);
-    
+
     return address;
   }
 
@@ -60,14 +62,13 @@ export class WalletManager {
       transactions: []
     };
 
-    // Save wallet
+    // Save wallet (encrypted at rest if ZCASH_KEY_PASSPHRASE is set)
     const wallets = this.getAllWallets();
     wallets.push(wallet);
-    fs.writeFileSync(this.walletsFile, JSON.stringify(wallets, null, 2));
+    fs.writeFileSync(this.walletsFile, serializeSecret(wallets));
 
-    // Save individual wallet file
     const walletFile = path.join(this.walletsDir, `${wallet.id}.json`);
-    fs.writeFileSync(walletFile, JSON.stringify(wallet, null, 2));
+    fs.writeFileSync(walletFile, serializeSecret(wallet));
 
     return wallet;
   }
@@ -76,11 +77,20 @@ export class WalletManager {
    * Get all wallets
    */
   getAllWallets() {
+    let data;
     try {
-      const data = fs.readFileSync(this.walletsFile, 'utf8');
-      return JSON.parse(data);
+      data = fs.readFileSync(this.walletsFile, 'utf8');
     } catch (error) {
-      return [];
+      if (error.code === 'ENOENT') {
+        return [];
+      }
+      throw error;
+    }
+    try {
+      const parsed = deserializeSecret(data);
+      return parsed || [];
+    } catch (error) {
+      throw new Error(`Wallet file at ${this.walletsFile} is corrupted: ${error.message}`);
     }
   }
 
@@ -113,7 +123,7 @@ export class WalletManager {
 
     const wallet = wallets[walletIndex];
     wallets.splice(walletIndex, 1);
-    fs.writeFileSync(this.walletsFile, JSON.stringify(wallets, null, 2));
+    fs.writeFileSync(this.walletsFile, serializeSecret(wallets));
 
     // Delete individual wallet file
     const walletFile = path.join(this.walletsDir, `${wallet.id}.json`);

@@ -10,7 +10,7 @@ npm start
 
 ## Step 2: Create a Wallet
 
-1. Select option `9` - Create wallet
+1. Select option `10` - Create wallet
 2. Enter wallet name: `my-wallet`
 3. Press Enter for default address type (sapling)
 4. Your wallet address will be displayed - save this!
@@ -27,18 +27,18 @@ npm start
 
 ## Step 4: View Your Token
 
-1. Select option `6` - List assets
+1. Select option `7` - List assets
 2. You should see your "test" token with symbol "test1"
 
 ## Step 5: Get Token Details
 
-1. Select option `7` - Info
+1. Select option `8` - Info
 2. Enter the Asset ID (copy it from the list-assets output)
 3. View all token details including Asset ID, Issuer, and Supply
 
 ## Step 6: Check On-Chain Status
 
-1. Select option `11` - Check on-chain
+1. Select option `12` - Check on-chain
 2. Enter the Asset ID
 3. This will show if the token exists on the blockchain
 
@@ -49,7 +49,7 @@ Note: Since ZSAs are not yet available on testnet, the token will show as "not_d
 ```
 === Zcash Meme Coin CLI Tool (ZIP 227) ===
 
-Select command (1-12): 9
+Select command (1-13): 10
 --- Create New Wallet ---
 Wallet Name: my-wallet
 Address Type (sapling/orchard, default: sapling): 
@@ -57,7 +57,7 @@ Address Type (sapling/orchard, default: sapling):
 [SUCCESS] Wallet created!
 Address: zt1abc123...
 
-Select command (1-12): 1
+Select command (1-13): 1
 --- Create New Token (ZIP 227) ---
 Token Name: test
 Token Symbol: test1
