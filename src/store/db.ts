@@ -5,6 +5,7 @@
 
 import { DatabaseSync } from "node:sqlite";
 import type { BurnVerdict, ValidBurn } from "../core/types.ts";
+import type { InscriptionRecord } from "../core/ledger.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS burns (
@@ -24,6 +25,21 @@ CREATE TABLE IF NOT EXISTS cursor (
   name  TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Inscriptions observed on Zcash. Rebuildable from chain at any time; kept so
+-- that an NFT stays known after it is transferred away from its first owner.
+CREATE TABLE IF NOT EXISTS inscriptions (
+  id           TEXT PRIMARY KEY,      -- "<revealTxid>i<n>"
+  txid         TEXT NOT NULL,
+  height       INTEGER NOT NULL,
+  tx_index     INTEGER NOT NULL DEFAULT 0,
+  idx          INTEGER NOT NULL DEFAULT 0,
+  content_type TEXT NOT NULL,
+  content      BLOB NOT NULL,
+  first_owner  TEXT NOT NULL,
+  seen_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS inscriptions_height ON inscriptions (height, tx_index, idx);
 
 -- One row per burn the minter has acted on. Status moves
 -- pending -> committed -> revealed -> confirmed, or -> failed.
@@ -96,6 +112,26 @@ export class Store {
       "SELECT SUM(ok = 1) AS valid, SUM(ok = 0) AS rejected, COUNT(*) AS total FROM burns").get() as Record<string, unknown>;
     return { valid: Number(r.valid ?? 0), rejected: Number(r.rejected ?? 0), total: Number(r.total ?? 0) };
   }
+}
+
+export function inscriptionRows(store: Store): InscriptionRecord[] {
+  return (store.db.prepare("SELECT * FROM inscriptions").all() as Record<string, unknown>[]).map((r) => ({
+    id: r.id as string,
+    txid: r.txid as string,
+    height: Number(r.height),
+    txIndex: Number(r.tx_index),
+    index: Number(r.idx),
+    contentType: r.content_type as string,
+    content: new Uint8Array(r.content as Uint8Array),
+    firstOwner: r.first_owner as string,
+  }));
+}
+
+export function saveInscription(store: Store, i: InscriptionRecord) {
+  store.db.prepare(
+    `INSERT OR IGNORE INTO inscriptions (id, txid, height, tx_index, idx, content_type, content, first_owner)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(i.id, i.txid, i.height, i.txIndex, i.index, i.contentType, Buffer.from(i.content), i.firstOwner);
 }
 
 function toBurn(r: Record<string, unknown>): ValidBurn {
