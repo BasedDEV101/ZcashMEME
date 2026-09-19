@@ -10,6 +10,13 @@ export interface TokenBurn {
   authority: string;   // owner or delegate that authorised the burn
   amount: bigint;      // raw base units (no decimals applied)
   topLevel: boolean;   // false = executed via CPI (inner instruction)
+  decimalsChecked: number | null;  // burnChecked's decimals byte; null for plain burn
+  // From pre/postTokenBalances. `sourceOwner` is the real owner of the token
+  // account and is what §3 checks -- the instruction's authority account alone
+  // cannot be trusted to identify a person.
+  sourceOwner: string | null;
+  preAmount: bigint | null;
+  postAmount: bigint;
 }
 
 export interface NormalizedTx {
@@ -28,6 +35,7 @@ export interface BridgeConfig {
   tokenProgramId: string;   // the program that owns solanaMint
   decimals: number;
   minBurnRaw: bigint;       // minimum burn in raw base units
+  startSlot: number;        // burns before this slot do not count (SPEC 2)
   zcashNetwork: "main" | "test";
   protocol: string;         // inscription protocol tag, e.g. "zsam"
 }

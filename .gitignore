@@ -22,3 +22,10 @@ target/
 
 # impeccable: commit surfaces, ignore build output
 .impeccable/build/
+
+# wallets: never committed (CLAUDE.md)
+keys/
+*.keypair.json
+
+# local toolchain (large, reproducible)
+.tools/

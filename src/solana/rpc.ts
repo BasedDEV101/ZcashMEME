@@ -68,7 +68,7 @@ export class SolanaRpc {
   getTransaction(signature: string, commitment: "finalized" | "confirmed" = "finalized") {
     return this.call<RpcTransaction | null>("getTransaction", [
       signature,
-      { encoding: "jsonParsed", commitment, maxSupportedTransactionVersion: MAX_TX_VERSION },
+      { encoding: "json", commitment, maxSupportedTransactionVersion: MAX_TX_VERSION },
     ]);
   }
 

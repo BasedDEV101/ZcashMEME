@@ -2,13 +2,13 @@
 // across transaction versions.
 import { SolanaRpc, readMint } from "../src/solana/rpc.ts";
 import { normalizeTransaction } from "../src/solana/normalize.ts";
-import { MEMO_V2 } from "../src/solana/programs.ts";
+import { MEMO_V3 } from "../src/solana/programs.ts";
 
 const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com");
 const usdc = await readMint(rpc, "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 console.log("readMint(USDC):", { ...usdc, supply: usdc.supply.toString() });
 
-const sigs = await rpc.getSignaturesForAddress(MEMO_V2, { limit: 40 });
+const sigs = await rpc.getSignaturesForAddress(MEMO_V3, { limit: 40 });
 const byVersion = new Map<string, number>();
 let memoOk = 0, memoMissing = 0;
 for (const s of sigs) {
