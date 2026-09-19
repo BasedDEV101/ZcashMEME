@@ -23,6 +23,9 @@ export interface SignatureInfo {
   err: unknown;
   blockTime?: number | null;
   confirmationStatus?: string;
+  /** Memo text of the tx, as "[len] text" (several joined by "; "), or null.
+      The watcher uses only null vs non-null; see watcher.ts. */
+  memo?: string | null;
 }
 
 export class SolanaRpc {
