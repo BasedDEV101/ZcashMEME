@@ -1,6 +1,12 @@
 # Brief
 
-## One-sentence product (operator's own words, confirmed 2026-09-19)
+## Current product (decided 2026-09-19, see docs/adr/0001-burn-to-mint.md)
+
+> Launch a new memecoin on Solana (pump.fun, done by the operator). Holders burn it to receive a Zcash NFT
+> stamped with the amount burned. It's one-way with nobody holding funds, publicly verifiable now, and
+> migrates to a native shielded ZSA once Zcash activates them.
+
+## Original one-sentence goal (operator's own words, confirmed 2026-09-19)
 
 > Launch the first memecoin (shielded asset) on Zcash using the best method available today, then turn
 > that into a launchpad where anyone can launch their own and we earn fees on the transactions.
