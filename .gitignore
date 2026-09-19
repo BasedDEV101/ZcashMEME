@@ -29,3 +29,7 @@ keys/
 
 # local toolchain (large, reproducible)
 .tools/
+
+# local runtime state
+state-*.db*
+config/localnet.json
