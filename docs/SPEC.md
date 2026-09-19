@@ -38,6 +38,7 @@ first burn is made.
 | `tokenProgramId` | the program that owns the mint (SPL Token or Token-2022) | from the mint account |
 | `decimals` | mint decimals | from the mint (pump.fun: 6) |
 | `minBurnRaw` | minimum burn, in raw base units | 1,000,000 tokens = `1_000_000 × 10^decimals` |
+| `startSlot` | burns in earlier slots do not count | the slot the mint was created in |
 | `zcashNetwork` | `main` or `test` | `main` in production |
 | `protocol` | inscription protocol tag | `zsam` |
 
@@ -47,13 +48,17 @@ A Solana transaction `T` is a **valid burn** if and only if every condition belo
 the transaction as recorded at `finalized` commitment.
 
 1. `T` is finalized.
-2. `T` succeeded (`meta.err` is null).
+2. `T` succeeded (`meta.err` is null), and `T.slot ≥ startSlot`.
 3. Among **all** burn instructions in `T`, top-level and inner, exactly **one** burns `solanaMint`.
    Burns of other mints are ignored.
 4. That burn is a **top-level** instruction. A burn executed through CPI is not valid.
 5. That burn was executed by `tokenProgramId`.
-6. The burn's authority (owner or delegate) is a signer of `T`.
-7. The burned amount `N` (raw units, taken from the instruction) is `≥ minBurnRaw`.
+6. The **owner** of the burned token account, as recorded in `preTokenBalances`, equals the burn's
+   authority account and is a signer of `T`. The owner must not be the system program or the
+   incinerator: token accounts owned by those can be burned by **anyone with no signature**, so a
+   stranger could otherwise burn abandoned tokens and claim the NFT.
+7. The burned amount `N` (raw units, from the instruction) is `≥ minBurnRaw`, the recorded balance change
+   of the source account equals `N`, and for `burnChecked` the decimals byte equals `decimals`.
 8. `T` contains exactly **one** memo instruction.
 9. The memo text, after trimming surrounding ASCII whitespace, is a Zcash **transparent** address
    (§3.1) on `zcashNetwork`.
@@ -123,13 +128,69 @@ Conditions 4, 5 and 8 enforce this by construction.
 
 ## 5. Zcash inscriptions
 
-_Pending research: `research/zcash-minting.md`._ The inscription envelope, the transaction library, and
-the endpoints.
+An NFT is an inscription in the "ord" scriptSig envelope, the format ~113,000 mainnet inscriptions already
+use and every live Zcash indexer reads, in the Universe Zerdinals **v1** profile
+(`research/zcash-minting.md`). Two transactions:
+
+```
+commit:  funding UTXOs -> [0] P2SH(redeemScript) worth revealFee+postage, [1] change
+reveal:  commit[0]     -> [0] recipient P2PKH, 546 zat postage
+```
+
+The reveal's `scriptSig` is:
+
+```
+PUSH "ord" | <totalPieces> | PUSH contentType | (<index> PUSH piece)... | PUSH sig | PUSH redeemScript
+```
+
+- content is split into 240-byte pieces, **indexed descending**, index 0 last;
+- `contentType` is `application/json`;
+- redeem script: `PUSH pubkey  OP_CHECKSIGVERIFY  PUSH C  OP_DROP  OP_DROP×(3+2·pieces)  OP_1`.
+
+`C = SHA-256("UZRD1" || contentType || 0x00 || content)`. It matters because **scriptSig bytes are outside
+the txid and covered by no signature** (§4.2 of ZIP 244): without `C`, relayed content could be altered
+before confirmation without changing the transaction id. Our content is ~247 bytes, so one piece.
+
+**Signing.** Transparent v5 transactions, ZIP 225 serialisation, ZIP 244 sighash. For a P2SH input the
+script code is the **scriptPubKey of the output being spent**, not the redeem script. Signatures are DER
+with S normalised low. Implemented in `src/zcash/zip244.ts`, verified by recomputing the sighash of a real
+mainnet reveal and checking its on-chain signature verifies.
+
+**Consensus branch id** is read live from the node (`GetLightdInfo`), never hardcoded: it changes at every
+network upgrade, and NU7's value is not yet published. Minting should pause across an activation.
+
+**Fees** are ZIP 317: `marginal_fee × max(2, logical_actions)`. The marginal fee drops 5000 → 1000 zat at
+mainnet height 3,590,000, so it is height-aware. It is **not** yet active on testnet: a commit built at
+1000/action was rejected with "Unpaid actions is higher than the limit". One NFT costs ~30,000 zat plus 546
+postage (~$0.45), falling to ~6,500 zat (~$0.10) after the cut.
+
+**Endpoints.** lightwalletd (`testnet.zec.rocks:443`) for chain tip, branch id, address UTXOs and
+broadcast. No public Zcash RPC exposes `getaddressutxos` and no testnet explorer API works, so lightwalletd
+is the only route.
 
 ## 6. Solana burn detection
 
-_Pending research: `research/solana-burn.md`._ How burns are discovered gap-free, and how RPC responses are
-normalised into the shape §3 evaluates.
+Every burn instruction writes to the mint account, so every burn appears in
+`getSignaturesForAddress(mint)` — but so does every trade. The watcher therefore fetches only transactions
+whose **listing carries a memo**: §3 rule 8 requires one, so the filter can never drop a valid burn, and on
+a busy token it avoids thousands of pointless fetches.
+
+One pass:
+1. page back from the newest finalized signature to the cursor;
+2. process oldest → newest, recording a verdict for every memo-carrying transaction that burns our mint;
+3. advance the cursor only after a clean pass.
+
+A crash mid-pass re-fetches; verdicts are written once per signature, so replay is harmless and nothing is
+skipped. The signature cursor is an **optimisation, not the source of truth**: an RPC that no longer knows
+it (pruned history, a different provider) errors, so the pass falls back to re-scanning and stopping at the
+last processed **slot**, which is stored alongside.
+
+**Normalisation** reads raw instruction bytes (`encoding: "json"`), resolves address-lookup-table keys, and
+takes the token-account owner from `preTokenBalances`. `jsonParsed` is not used for this: it can report a
+normal owner as `multisigAuthority` when extra accounts are appended, and labels Token-2022 as
+`spl-token` — either would reject a real burn, and a burn cannot be undone. `getTransaction` is called with
+`maxSupportedTransactionVersion: 1`; asking for less makes the RPC throw on v1 transactions, which exist on
+mainnet today.
 
 ## 7. Migration to native ZSA
 
