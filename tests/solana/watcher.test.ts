@@ -95,3 +95,32 @@ test("idle pass is cheap and does not move the cursor", async () => {
   assert.equal(store.getCursor(`solana:${MINT}`), cur);
   assert.equal(rpc.calls.get, 1);
 });
+
+test("survives an RPC that no longer knows the cursor signature", async () => {
+  const { rpc, store, add, pass } = setup();
+  const first = make("burn");
+  add(first);
+  await pass();
+  const cursor = store.getCursor(`solana:${MINT}`)!;
+  assert.equal(store.validBurns().length, 1);
+
+  // The RPC forgets it: pruned history, or a different provider.
+  rpc.unknownSignatures.add(cursor);
+  add(make("burn", { memo: BOB_Z }));
+
+  const r = await pass();
+  assert.equal(r.valid, 1, "the new burn is still found");
+  assert.equal(store.validBurns().length, 2, "and the old one is not lost or duplicated");
+  assert.notEqual(store.getCursor(`solana:${MINT}`), cursor, "cursor advanced past the unknown signature");
+});
+
+test("the slot cursor stops a re-scan from re-fetching old transactions", async () => {
+  const { rpc, store, add, pass } = setup();
+  for (let i = 0; i < 5; i++) add(make("burn", { memo: BOB_Z }));
+  await pass();
+  const gets = rpc.calls.get;
+  rpc.unknownSignatures.add(store.getCursor(`solana:${MINT}`)!);
+  add(make("burn"));
+  await pass();
+  assert.equal(rpc.calls.get - gets, 1, "only the one new tx is fetched, not all six again");
+});

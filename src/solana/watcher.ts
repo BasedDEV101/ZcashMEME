@@ -18,7 +18,7 @@
 import type { BridgeConfig } from "../core/types.ts";
 import { evaluateBurn } from "../core/validity.ts";
 import { normalizeTransaction } from "./normalize.ts";
-import type { SignatureInfo, SolanaRpc } from "./rpc.ts";
+import { RpcError, type SignatureInfo, type SolanaRpc } from "./rpc.ts";
 import type { Store } from "../store/db.ts";
 
 export interface PassResult {
@@ -37,17 +37,39 @@ export async function watchPass(
   opts: { pageSize?: number; log?: Log } = {},
 ): Promise<PassResult> {
   const cursorName = `solana:${cfg.solanaMint}`;
+  const slotName = `${cursorName}:slot`;
   const until = store.getCursor(cursorName) ?? undefined;
+  const lastSlot = Number(store.getCursor(slotName) ?? "0");
   const pageSize = opts.pageSize ?? 1000;
   const log = opts.log ?? (() => {});
 
-  // 1. collect everything newer than the cursor (newest first)
+  // 1. collect everything newer than the cursor (newest first).
+  //
+  // `until` is an optimisation, not the source of truth: an RPC that no longer
+  // knows that signature (pruned history, a different provider) errors on it,
+  // which would wedge the watcher forever. On that error we re-scan without it
+  // and stop at the last processed slot instead. Observed for real against a
+  // local validator whose history had aged out.
   const fresh: SignatureInfo[] = [];
   let before: string | undefined;
+  let useUntil = until;
   for (;;) {
-    const page = await rpc.getSignaturesForAddress(cfg.solanaMint, { before, until, limit: pageSize });
-    fresh.push(...page);
-    if (page.length < pageSize) break;
+    let page: SignatureInfo[];
+    try {
+      page = await rpc.getSignaturesForAddress(cfg.solanaMint, { before, until: useUntil, limit: pageSize });
+    } catch (e) {
+      if (useUntil && e instanceof RpcError && /not found/i.test(e.message)) {
+        log(`cursor signature unknown to the RPC; falling back to slot ${lastSlot}`);
+        useUntil = undefined;
+        fresh.length = 0;
+        before = undefined;
+        continue;
+      }
+      throw e;
+    }
+    const stop = page.findIndex((s) => s.slot <= lastSlot && !useUntil);
+    fresh.push(...(stop >= 0 ? page.slice(0, stop) : page));
+    if (stop >= 0 || page.length < pageSize) break;
     before = page[page.length - 1].signature;
   }
   const result: PassResult = { scanned: fresh.length, fetched: 0, burnAttempts: 0, valid: 0, rejected: 0, cursor: until ?? null };
@@ -77,9 +99,10 @@ export async function watchPass(
   }
 
   // 3. advance. `fresh` is now oldest-first, so the last element is newest.
-  const newest = fresh[fresh.length - 1].signature;
-  store.setCursor(cursorName, newest);
-  result.cursor = newest;
+  const newest = fresh[fresh.length - 1];
+  store.setCursor(cursorName, newest.signature);
+  store.setCursor(slotName, String(Math.max(newest.slot, lastSlot)));
+  result.cursor = newest.signature;
   return result;
 }
 

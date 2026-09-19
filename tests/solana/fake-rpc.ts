@@ -1,12 +1,14 @@
 // In-memory stand-in for SolanaRpc with real paging semantics:
 // newest-first, `before` and `until` exclusive, `limit` honoured.
 import type { RpcTransaction } from "../../src/solana/normalize.ts";
-import type { SignatureInfo } from "../../src/solana/rpc.ts";
+import { RpcError, type SignatureInfo } from "../../src/solana/rpc.ts";
 
 export class FakeRpc {
   history: { info: SignatureInfo; tx: RpcTransaction }[] = []; // oldest first
   calls = { list: 0, get: 0 };
   failGetOnce = new Set<string>();
+  /** Signatures the node claims not to know, as a pruned/changed RPC would. */
+  unknownSignatures = new Set<string>();
 
   push(tx: RpcTransaction, memo: string | null) {
     const sig = tx.transaction.signatures[0];
@@ -15,6 +17,9 @@ export class FakeRpc {
 
   async getSignaturesForAddress(_addr: string, o: { before?: string; until?: string; limit?: number } = {}) {
     this.calls.list++;
+    if (o.until && this.unknownSignatures.has(o.until)) {
+      throw new RpcError(`getSignaturesForAddress: Transaction ${o.until} not found`);
+    }
     const newestFirst = [...this.history].reverse().map((h) => h.info);
     let start = 0;
     if (o.before) start = newestFirst.findIndex((s) => s.signature === o.before) + 1;
