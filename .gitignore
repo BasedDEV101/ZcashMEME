@@ -1,0 +1,21 @@
+# secrets -- never commit keys, seeds, wallet files or .env
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+wallet*.json
+*seed*
+
+# deps and build output
+node_modules/
+.venv/
+venv/
+__pycache__/
+dist/
+build/
+target/
+.next/
+.vite/
+
+.DS_Store
