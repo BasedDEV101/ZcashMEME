@@ -19,3 +19,6 @@ target/
 .vite/
 
 .DS_Store
+
+# impeccable: commit surfaces, ignore build output
+.impeccable/build/
