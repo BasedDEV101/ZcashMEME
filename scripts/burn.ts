@@ -18,9 +18,10 @@ for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i].replac
 const cfg = JSON.parse(readFileSync(process.env.BRIDGE_CONFIG ?? "config/devnet.json", "utf8"));
 if (cfg.network === "mainnet") throw new Error("refusing to burn on mainnet from this script");
 
-const to = args.get("to");
-const parsed = to ? parseTransparentAddress(to) : null;
+const toArg = args.get("to");
+const parsed = toArg ? parseTransparentAddress(toArg) : null;
 if (!parsed) throw new Error("--to must be a Zcash transparent address");
+const to: string = parsed.address;
 if (parsed.network !== cfg.zcashNetwork) throw new Error(`--to is a ${parsed.network}net address, config wants ${cfg.zcashNetwork}net`);
 
 const whole = BigInt(args.get("amount") ?? "1000000");
