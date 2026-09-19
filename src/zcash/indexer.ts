@@ -9,7 +9,7 @@
 // which is why observed inscriptions are persisted. Full ordinal-style
 // transfer tracking needs block-level scanning and is not implemented.
 
-import type { BridgeConfig, ValidBurn } from "../core/types.ts";
+import type { BridgeConfig } from "../core/types.ts";
 import { buildLedger, type InscriptionRecord, type Ledger } from "../core/ledger.ts";
 import { parseNftContent } from "../core/nft.ts";
 import { assemble, commitment, decodeEnvelope, DUST_ZAT } from "./inscription.ts";
@@ -34,9 +34,15 @@ export function firstScriptSig(raw: Uint8Array): Uint8Array | null {
   return raw.subarray(o, o + len);
 }
 
-/** Look for the inscription that satisfies a given burn. */
-export async function findInscriptionFor(lwd: Lightwalletd, burn: ValidBurn, cfg: BridgeConfig): Promise<InscriptionRecord | null> {
-  const utxos = await lwd.utxos(burn.zcashAddress);
+/**
+ * Every protocol inscription currently sitting at an address, whatever it
+ * claims. Inscriptions citing unknown or mismatched burns are returned too, so
+ * the ledger can reject them by rule with a stated reason rather than the
+ * indexer quietly dropping them.
+ */
+export async function findInscriptionsAt(lwd: Lightwalletd, address: string, cfg: BridgeConfig): Promise<InscriptionRecord[]> {
+  const utxos = await lwd.utxos(address);
+  const found: InscriptionRecord[] = [];
   const candidates = utxos.filter((u) => u.valueZat >= DUST_ZAT && u.valueZat < 100_000n);
   for (const u of candidates) {
     let raw: Uint8Array;
@@ -53,9 +59,8 @@ export async function findInscriptionFor(lwd: Lightwalletd, burn: ValidBurn, cfg
     const content = assemble(env.pieces);
     // The v1 commitment must match, or the content was altered in flight.
     if (env.commitment && hex(env.commitment) !== hex(commitment(env.contentType, content))) continue;
-    const nft = parseNftContent(content, cfg.protocol);
-    if (!nft || nft.burn !== burn.signature) continue;
-    return {
+    if (!parseNftContent(content, cfg.protocol)) continue;   // not ours at all
+    found.push({
       id: `${u.txid}i0`,
       txid: u.txid,
       height: height || Number.MAX_SAFE_INTEGER, // unconfirmed sorts last
@@ -63,20 +68,22 @@ export async function findInscriptionFor(lwd: Lightwalletd, burn: ValidBurn, cfg
       index: 0,
       contentType: env.contentType,
       content,
-      firstOwner: burn.zcashAddress,
-    };
+      firstOwner: address,
+    });
   }
-  return null;
+  return found;
 }
 
 /** One indexing pass: find missing inscriptions, then rebuild the ledger. */
 export async function indexPass(lwd: Lightwalletd, store: Store, cfg: BridgeConfig, log: (m: string) => void = () => {}): Promise<Ledger> {
   const known = new Set(inscriptionRows(store).map((i) => i.txid));
-  for (const burn of store.validBurns()) {
-    const found = await findInscriptionFor(lwd, burn, cfg);
-    if (found && !known.has(found.txid)) {
+  const addresses = new Set(store.validBurns().map((b) => b.zcashAddress));
+  for (const address of addresses) {
+    for (const found of await findInscriptionsAt(lwd, address, cfg)) {
+      if (known.has(found.txid)) continue;
       saveInscription(store, found);
-      log(`found inscription ${found.id} for burn ${burn.signature.slice(0, 8)}…`);
+      known.add(found.txid);
+      log(`found inscription ${found.id} at ${address}`);
     }
   }
   return buildLedger(inscriptionRows(store), store.verdicts(), cfg);
