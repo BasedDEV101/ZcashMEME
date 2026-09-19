@@ -113,6 +113,23 @@ export function signatureHash(tx: TxSkeleton, index: number, hashType: number = 
   ));
 }
 
+/**
+ * The transaction id of a transparent-only v5 transaction (ZIP 244 T.1).
+ * Note it commits to prevouts, sequences and outputs but NOT to scriptSigs --
+ * which is exactly why the inscription envelope carries its own commitment.
+ * Returned big-endian, the way explorers display it.
+ */
+export function txid(tx: TxSkeleton): string {
+  const prevouts = h("ZTxIdPrevoutHash", concat(...tx.inputs.map((i) => concat(txidLE(i.txid), u32le(i.vout)))));
+  const sequence = h("ZTxIdSequencHash", concat(...tx.inputs.map((i) => u32le(seqOf(i)))));
+  const outputs = h("ZTxIdOutputsHash", concat(...tx.outputs.map((o) => concat(u64le(o.valueZat), withLen(o.scriptPubKey)))));
+  const transparent = h("ZTxIdTranspaHash", concat(prevouts, sequence, outputs));
+  const digest = h(txPersonal(tx.consensusBranchId), concat(
+    headerDigest(tx), transparent, EMPTY_SAPLING(), EMPTY_ORCHARD(),
+  ));
+  return Buffer.from(digest).reverse().toString("hex");
+}
+
 // --- ZIP 225 serialisation -------------------------------------------------
 
 /** Serialise a transparent-only v5 transaction with the given scriptSigs. */
