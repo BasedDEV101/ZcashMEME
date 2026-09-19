@@ -16,10 +16,16 @@ export const MARGINAL_FEE_BEFORE = 5000n;
 export const MARGINAL_FEE_AFTER = 1000n;
 export const MARGINAL_FEE_DROP_HEIGHT = 3_590_000;
 
+/**
+ * Conservative on purpose. Underpaying is fatal -- a testnet node rejected a
+ * commit built at 1000 zat/action with "Unpaid actions is higher than the
+ * limit" (2026-09-19), proving the cut is NOT live on testnet yet -- while
+ * overpaying merely wastes a few thousand zatoshi. So the reduced fee is used
+ * only where it is known to be active: mainnet at or above the drop height.
+ */
 export function marginalFee(height: number, network: "main" | "test" = "main"): bigint {
-  // The drop height is a mainnet height; on testnet assume the new fee applies.
-  if (network === "test") return MARGINAL_FEE_AFTER;
-  return height >= MARGINAL_FEE_DROP_HEIGHT ? MARGINAL_FEE_AFTER : MARGINAL_FEE_BEFORE;
+  if (network === "main" && height >= MARGINAL_FEE_DROP_HEIGHT) return MARGINAL_FEE_AFTER;
+  return MARGINAL_FEE_BEFORE;
 }
 
 export function logicalActions(txInTotalSize: number, txOutTotalSize: number): number {

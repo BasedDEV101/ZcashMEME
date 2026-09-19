@@ -7,7 +7,7 @@ import { signatureHash, serializeV5 } from "../../src/zcash/zip244.ts";
 import { TransparentKey, hash160, p2shScript } from "../../src/zcash/wallet.ts";
 import { derToCompact } from "../../src/zcash/der.ts";
 import { hex, parseScript, unhex } from "../../src/zcash/script.ts";
-import { conventionalFee, inputSize, outputSize, MARGINAL_FEE_AFTER } from "../../src/zcash/fees.ts";
+import { conventionalFee, inputSize, outputSize, MARGINAL_FEE_BEFORE } from "../../src/zcash/fees.ts";
 import { contentForBurn, encodeNftBytes, CONTENT_TYPE } from "../../src/core/nft.ts";
 import { CFG, ALICE_Z, fakeSig } from "../core/fixtures.ts";
 
@@ -79,11 +79,11 @@ test("money is conserved and the recipient gets the postage", () => {
 test("ZIP 317 fees match a hand calculation", () => {
   const ins = build();
   const revealScriptSigLen = ins.reveal.scriptSigs[0].length;
-  const expected = conventionalFee(inputSize(revealScriptSigLen), outputSize(25), MARGINAL_FEE_AFTER);
+  const expected = conventionalFee(inputSize(revealScriptSigLen), outputSize(25), MARGINAL_FEE_BEFORE);
   // the builder sizes with a 72-byte signature; real ones may be 70-71
   assert.ok(ins.reveal.feeZat >= expected, `reveal fee ${ins.reveal.feeZat} >= ${expected}`);
-  assert.ok(ins.reveal.feeZat <= expected + MARGINAL_FEE_AFTER, "and never wildly over");
-  assert.ok(ins.totalCostZat < 20_000n, `total ${ins.totalCostZat} zat should be well under 20k at the new marginal fee`);
+  assert.ok(ins.reveal.feeZat <= expected + MARGINAL_FEE_BEFORE, "and never wildly over");
+  assert.ok(ins.totalCostZat < 40_000n, `total ${ins.totalCostZat} zat`);
 });
 
 test("raw transactions serialise and the scriptSig stays within envelope limits", () => {

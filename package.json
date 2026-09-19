@@ -16,6 +16,8 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1",
     "@noble/hashes": "^1.8.0",
     "@noble/secp256k1": "^2.3.0",
     "@solana/spl-token": "^0.4.15",
