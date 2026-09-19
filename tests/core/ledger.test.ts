@@ -68,6 +68,17 @@ test("tampered inscriptions are rejected with a specific reason", () => {
   assert.equal(l.unclaimed.length, 1, "the real burn is still owed an NFT");
 });
 
+test("a burn this verifier cannot see is UNRESOLVED, never invalid", () => {
+  // "the burn does not exist" and "my RPC cannot see it" look identical
+  // locally. Treating the second as the first would erase real NFTs whenever
+  // history is pruned -- which happened for real against a live validator.
+  const b = validBurn("pruned");
+  const l = buildLedger([inscribe(b)], new Map(), CFG);
+  assert.equal(l.nfts.length, 0);
+  assert.equal(l.rejected.length, 0, "not rejected");
+  assert.deepEqual(l.unresolved.map((u) => u.burn), [b.signature]);
+});
+
 test("an inscription citing an invalid burn is rejected with the burn's reason", () => {
   const b = validBurn("inv");
   const bad = new Map<string, BurnVerdict>([[b.signature, { ok: false, reason: "not finalized" }]]);
@@ -91,7 +102,8 @@ test("REPORT worked example: stolen minter key cannot inflate supply", () => {
   }
   const l = buildLedger([...honest, ...forged], verdicts(...real), CFG);
   assert.equal(l.nfts.length, 3, "supply stays exactly equal to real burns");
-  assert.equal(l.rejected.length, 50);
+  assert.equal(l.rejected.length + l.unresolved.length, 50, "every forgery is kept out");
+  assert.ok(l.unresolved.length > 0, "made-up burn signatures are unresolved, not proven invalid");
   const totalNft = l.nfts.reduce((s, n) => s + n.burn.amount, 0n);
   const totalBurned = real.reduce((s, b) => s + b.amount, 0n);
   assert.equal(totalNft, totalBurned, "NFT-represented amount equals burned amount");

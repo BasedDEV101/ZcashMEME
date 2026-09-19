@@ -42,9 +42,23 @@ export interface Rejected {
   reason: string;
 }
 
+/**
+ * An inscription whose cited burn this verifier could not see at all.
+ *
+ * NOT the same as invalid. "The burn does not exist" and "my RPC cannot reach
+ * that far back" look identical locally, and treating the second as the first
+ * would silently erase real NFTs whenever history is pruned or a provider is
+ * swapped. Resolve these against an archival RPC before drawing a conclusion.
+ */
+export interface Unresolved {
+  inscriptionId: string;
+  burn: string;
+}
+
 export interface Ledger {
   nfts: Nft[];
   rejected: Rejected[];
+  unresolved: Unresolved[];
   /** Valid burns that have no NFT yet: the minter's work queue. */
   unclaimed: ValidBurn[];
 }
@@ -66,6 +80,7 @@ export function buildLedger(
 ): Ledger {
   const nfts: Nft[] = [];
   const rejected: Rejected[] = [];
+  const unresolved: Unresolved[] = [];
   const claimed = new Set<string>();
   const reject = (i: InscriptionRecord, reason: string) =>
     rejected.push({ inscriptionId: i.id, reason });
@@ -77,7 +92,7 @@ export function buildLedger(
     if (c.mint !== cfg.solanaMint) { reject(ins, "different mint"); continue; }
 
     const verdict = burns.get(c.burn);
-    if (!verdict) { reject(ins, "unknown burn"); continue; }
+    if (!verdict) { unresolved.push({ inscriptionId: ins.id, burn: c.burn }); continue; }
     if (!verdict.ok) { reject(ins, `invalid burn: ${verdict.reason}`); continue; }
     const burn = verdict.burn;
 
@@ -96,5 +111,5 @@ export function buildLedger(
   }
   unclaimed.sort((a, b) => a.slot - b.slot || (a.signature < b.signature ? -1 : 1));
 
-  return { nfts, rejected, unclaimed };
+  return { nfts, rejected, unresolved, unclaimed };
 }

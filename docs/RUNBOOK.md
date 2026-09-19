@@ -61,6 +61,10 @@ or is out of funds. If it is not listed at all, run `scripts/watch.ts` and look 
 the burn failed a rule (most often no memo, a memo that is not a transparent address, or below the
 minimum).
 
+**The ledger looks short, or NFTs are "unresolved"** — the Solana RPC cannot see the burns those
+inscriptions cite. Point `rpc` at an **archival** provider and re-run. Never treat unresolved as invalid;
+that is the difference between "this burn never happened" and "I cannot see it".
+
 **Around a Zcash network upgrade** — the consensus branch id changes. It is read live from the node, but
 a transaction built just before activation will be rejected after it. Pause minting across the activation
 height, then resume.

@@ -59,6 +59,11 @@ That is the stolen-minter-key scenario executed for real. The minter is not trus
 7. **A cursor signature the RPC no longer knows wedges the watcher forever.** Hit for real; now falls back
    to a slot cursor.
 8. **UTC/local timestamp split** in the queue schema (found twice, independently).
+9. **"Unknown burn" conflated two different things.** Rebuilding from an empty database against a
+   validator whose history had aged out marked a real NFT's burn as *invalid* when the truth was
+   *unseeable*. A pruned RPC would silently erase real NFTs. The ledger now reports **unresolved**
+   separately, the indexer fetches cited burns directly, and a canonical rebuild is documented as needing
+   an archival RPC.
 
 ## Numbers
 
@@ -73,4 +78,7 @@ That is the stolen-minter-key scenario executed for real. The minter is not trus
 - **Mainnet anything.** Requires the pump.fun launch, a funded mainnet wallet, and approval.
 - **Transfer tracking.** An inscription is discoverable while it sits at its first owner's address;
   ordinal-style transfer tracking needs block-level scanning.
+- **A full rebuild needs an archival Solana RPC.** Rebuilding against the local validator recovered only
+  the burns still in its history. That is correct behaviour, but it means the canonical ledger should be
+  rebuilt against a provider with full history.
 - **Multi-piece inscriptions.** Content over 240 bytes × 4 would need reveal chaining. Ours is one piece.

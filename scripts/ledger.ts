@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import { Store } from "../src/store/db.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
 import { indexPass } from "../src/zcash/indexer.ts";
+import { SolanaRpc } from "../src/solana/rpc.ts";
+import { normalizeTransaction } from "../src/solana/normalize.ts";
+import { evaluateBurn } from "../src/core/validity.ts";
 import type { BridgeConfig } from "../src/core/types.ts";
 
 const raw = JSON.parse(readFileSync(process.env.BRIDGE_CONFIG ?? "config/devnet.json", "utf8"));
@@ -14,7 +17,17 @@ const cfg: BridgeConfig = {
 const store = new Store(process.env.BRIDGE_DB ?? `state-${raw.network}.db`);
 const lwd = new Lightwalletd(process.env.LIGHTWALLETD ?? (cfg.zcashNetwork === "test" ? "testnet.zec.rocks:443" : "zec.rocks:443"));
 
-const ledger = await indexPass(lwd, store, cfg, (m) => console.log(`  ${m}`));
+// A burn an inscription cites but the watcher never listed (history pruned,
+// or a different RPC) is fetched directly rather than assumed non-existent.
+const rpc = new SolanaRpc(raw.rpc);
+const resolve = async (signature: string) => {
+  const tx = await rpc.getTransaction(signature, "finalized");
+  if (!tx) throw new Error("not found by this RPC");
+  const n = normalizeTransaction(tx, { finalized: true });
+  store.recordVerdict(n.signature, n.slot, n.blockTime, evaluateBurn(n, cfg));
+};
+
+const ledger = await indexPass(lwd, store, cfg, (m) => console.log(`  ${m}`), resolve);
 const dec = 10n ** BigInt(cfg.decimals);
 
 console.log(`\nNFTs (${ledger.nfts.length}):`);
@@ -22,6 +35,10 @@ for (const n of ledger.nfts) {
   console.log(`  #${n.number}  ${n.burn.amount / dec} tokens  -> ${n.burn.zcashAddress}`);
   console.log(`        inscription ${n.inscriptionId}`);
   console.log(`        burn        ${n.burn.signature}`);
+}
+if (ledger.unresolved.length) {
+  console.log(`\nUnresolved (${ledger.unresolved.length}) -- cited burn not visible to this RPC, NOT invalid:`);
+  for (const u of ledger.unresolved) console.log(`  ${u.inscriptionId}: cites ${u.burn.slice(0, 16)}…`);
 }
 if (ledger.rejected.length) {
   console.log(`\nRejected (${ledger.rejected.length}):`);

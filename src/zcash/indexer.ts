@@ -11,11 +11,11 @@
 
 import type { BridgeConfig } from "../core/types.ts";
 import { buildLedger, type InscriptionRecord, type Ledger } from "../core/ledger.ts";
-import { parseNftContent } from "../core/nft.ts";
 import { assemble, commitment, decodeEnvelope, DUST_ZAT } from "./inscription.ts";
 import type { Lightwalletd } from "./lightwalletd.ts";
 import { hex } from "./script.ts";
 import { inscriptionRows, saveInscription, type Store } from "../store/db.ts";
+import { parseNftContent as parseContent } from "../core/nft.ts";
 
 /** Read the first input's scriptSig out of a serialised transparent v5 tx. */
 export function firstScriptSig(raw: Uint8Array): Uint8Array | null {
@@ -59,7 +59,7 @@ export async function findInscriptionsAt(lwd: Lightwalletd, address: string, cfg
     const content = assemble(env.pieces);
     // The v1 commitment must match, or the content was altered in flight.
     if (env.commitment && hex(env.commitment) !== hex(commitment(env.contentType, content))) continue;
-    if (!parseNftContent(content, cfg.protocol)) continue;   // not ours at all
+    if (!parseContent(content, cfg.protocol)) continue;   // not ours at all
     found.push({
       id: `${u.txid}i0`,
       txid: u.txid,
@@ -74,8 +74,16 @@ export async function findInscriptionsAt(lwd: Lightwalletd, address: string, cfg
   return found;
 }
 
+/**
+ * Resolve a burn an inscription cites but we have no verdict for, by fetching
+ * that single transaction directly. `getTransaction` reaches back further than
+ * `getSignaturesForAddress`, so this rescues NFTs whose burn has scrolled out
+ * of the listing window.
+ */
+export type BurnResolver = (signature: string) => Promise<void>;
+
 /** One indexing pass: find missing inscriptions, then rebuild the ledger. */
-export async function indexPass(lwd: Lightwalletd, store: Store, cfg: BridgeConfig, log: (m: string) => void = () => {}): Promise<Ledger> {
+export async function indexPass(lwd: Lightwalletd, store: Store, cfg: BridgeConfig, log: (m: string) => void = () => {}, resolve?: BurnResolver): Promise<Ledger> {
   const known = new Set(inscriptionRows(store).map((i) => i.txid));
   const addresses = new Set(store.validBurns().map((b) => b.zcashAddress));
   for (const address of addresses) {
@@ -86,5 +94,17 @@ export async function indexPass(lwd: Lightwalletd, store: Store, cfg: BridgeConf
       log(`found inscription ${found.id} at ${address}`);
     }
   }
-  return buildLedger(inscriptionRows(store), store.verdicts(), cfg);
+  let ledger = buildLedger(inscriptionRows(store), store.verdicts(), cfg);
+  if (resolve && ledger.unresolved.length > 0) {
+    for (const u of ledger.unresolved) {
+      try {
+        await resolve(u.burn);
+        log(`resolved cited burn ${u.burn.slice(0, 8)}… directly`);
+      } catch (e) {
+        log(`could not resolve burn ${u.burn.slice(0, 8)}…: ${(e as Error).message}`);
+      }
+    }
+    ledger = buildLedger(inscriptionRows(store), store.verdicts(), cfg);
+  }
+  return ledger;
 }

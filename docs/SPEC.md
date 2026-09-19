@@ -115,6 +115,21 @@ NFTs are numbered `#1, #2, …` in the order they are accepted, with no gaps.
 
 A valid burn with no NFT yet is **unclaimed**. The set of unclaimed burns is the minter's work queue.
 
+### 4.2.1 Unresolved is not invalid
+
+Condition 4 asks whether a cited burn **is** a valid burn. A verifier that cannot *see* the transaction
+has not answered that question. "The burn never happened" and "my RPC does not reach that far back" look
+identical locally, so an inscription whose burn cannot be fetched is reported **unresolved**, never
+rejected.
+
+This is not theoretical: rebuilding from an empty database against a validator whose history had aged out
+produced exactly this case. Treating it as invalid would silently erase real NFTs whenever history is
+pruned or a provider is swapped.
+
+**A canonical rebuild therefore needs an archival Solana RPC.** `getTransaction` reaches back further than
+`getSignaturesForAddress`, so a cited-but-unlisted burn is resolved by fetching it directly; but a node
+that has neither cannot produce the full ledger, and should say so rather than publish a short one.
+
 ### 4.3 Supply invariant
 
 For every deployment, at every block:
