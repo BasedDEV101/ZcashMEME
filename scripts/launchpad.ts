@@ -69,16 +69,20 @@ for (let pass = 1; ; pass++) {
         const w = await watchPass(rpc, store, cfg, { log: (m) => console.log(`${tag} ${m}`) });
         if (w.burnAttempts) console.log(`${tag} ${w.valid} valid, ${w.rejected} rejected`);
 
+        // Ask the chain what is actually owed before spending anything: a
+        // fresh store has no memory of stamps already inscribed, and paying to
+        // mint a duplicate burns fees for an inscription the ledger rejects.
+        const ledger = await indexPass(lwd, store, cfg, (m) => console.log(`${tag} ${m}`));
         const funds = (await lwd.utxos(fundKey.address(network))).reduce((s, u) => s + u.valueZat, 0n);
-        const owed = store.validBurns().length;
-        if (funds < STAMP_COST && owed > 0) {
-          console.log(`${tag} funding empty (${funds} zat at ${fundingAddressFor(master, c.mint, network)}); stamps queued`);
+
+        if (ledger.unclaimed.length === 0) {
+          if (pass % 10 === 1) console.log(`${tag} ${ledger.nfts.length} stamps, nothing owed, ${Number(funds) / 1e8} ZEC funding`);
+        } else if (funds < STAMP_COST) {
+          console.log(`${tag} ${ledger.unclaimed.length} stamp(s) owed but funding is empty (${funds} zat)`);
+          console.log(`${tag} fund ${fundingAddressFor(master, c.mint, network)} to release them`);
         } else {
-          const minted = await mintPass({ key: fundKey, lwd, cfg, log: (m) => console.log(`${tag} ${m}`) }, store);
-          if (minted.length || pass % 10 === 1) {
-            const ledger = await indexPass(lwd, store, cfg, (m) => console.log(`${tag} ${m}`));
-            console.log(`${tag} ${ledger.nfts.length} stamps, ${ledger.unclaimed.length} owed, ${Number(funds) / 1e8} ZEC funding`);
-          }
+          const minted = await mintPass({ key: fundKey, lwd, cfg, log: (m) => console.log(`${tag} ${m}`) }, store, ledger.unclaimed);
+          console.log(`${tag} minted ${minted.length}, ${ledger.nfts.length} stamps total`);
         }
       } finally {
         store.close();

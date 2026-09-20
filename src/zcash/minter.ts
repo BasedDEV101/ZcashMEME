@@ -54,7 +54,14 @@ export async function mintOne(deps: MintDeps, burn: ValidBurn, utxos: Utxo[], ch
   return { burn, inscription, commitTxid: inscription.commit.txid, revealTxid: inscription.reveal.txid };
 }
 
-/** Burns with a valid verdict that no mint job has completed yet. */
+/**
+ * Burns with a valid verdict that no mint job has completed yet.
+ *
+ * This is LOCAL knowledge only. A fresh store knows nothing about stamps
+ * already on chain, so callers that can reach the chain should pass the
+ * ledger's `unclaimed` list to mintPass instead: minting a burn that already
+ * has a stamp spends real fees on an inscription the ledger will reject.
+ */
 export function pendingBurns(store: Store): ValidBurn[] {
   const done = new Set(
     (store.db.prepare("SELECT signature FROM mint_jobs WHERE status IN ('revealed','confirmed')").all() as { signature: string }[])
@@ -77,14 +84,19 @@ export function recordJob(store: Store, signature: string, status: string, field
   ).run(signature, status, fields.commit ?? null, fields.reveal ?? null, fields.error ?? null);
 }
 
-/** One pass: mint every pending burn, one at a time so UTXOs cannot collide. */
-export async function mintPass(deps: MintDeps, store: Store): Promise<MintResult[]> {
+/**
+ * One pass: mint every pending burn, one at a time so UTXOs cannot collide.
+ *
+ * `owed` overrides the local job table. Pass the ledger's unclaimed list so a
+ * store that has not seen an existing stamp cannot pay to mint a duplicate.
+ */
+export async function mintPass(deps: MintDeps, store: Store, owed?: ValidBurn[]): Promise<MintResult[]> {
   const log = deps.log ?? (() => {});
   const info = await deps.lwd.info();
   const address = deps.key.address(deps.cfg.zcashNetwork);
   const out: MintResult[] = [];
 
-  for (const burn of pendingBurns(store)) {
+  for (const burn of owed ?? pendingBurns(store)) {
     const utxos = await deps.lwd.utxos(address);
     if (utxos.length === 0) {
       log(`no confirmed utxos for ${address}: waiting (fund it or let change confirm)`);
