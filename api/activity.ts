@@ -169,8 +169,16 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     const rows = new Map<string, Burn>();
     for (const b of (history as { burns: Burn[] }).burns) rows.set(b.signature, b);
 
-    // Every mint in one call, before anything else needs them.
-    const mintInfo = await readMints(r, [...collections.keys()]);
+    // Every mint in one call, before anything else needs them. A throttled
+    // RPC here used to fail the whole request -- and with it the launches
+    // already discovered above, which needed no mint data at all. It now
+    // degrades: the coins still list, without their burns or market caps.
+    let mintInfo = new Map<string, Awaited<ReturnType<typeof readMints>> extends Map<string, infer V> ? V : never>();
+    try {
+      mintInfo = await readMints(r, [...collections.keys()]);
+    } catch {
+      partial = true;
+    }
 
     let fetched = 0;
     // Newest collections first. The flagship has 1.28M signatures and its
@@ -318,7 +326,12 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     if (!partial && ranked.length > 0) await saveSnapshot(body);
     return json(res, 200, body, 120);
   } catch (e) {
-    if (cached) return json(res, 200, { ...cached, stale: true }, 60);
+    // Ask for the snapshot again rather than trusting the copy read at the
+    // start: that read can itself have failed, and answering 502 while a
+    // perfectly good previous answer sits in storage is the one outcome
+    // worth going out of the way to avoid.
+    const last = cached ?? (await loadSnapshot());
+    if (last) return json(res, 200, { ...last, stale: true }, 60);
     return json(res, 502, { error: (e as Error).message, collections: [], burns: [] });
   }
 }
