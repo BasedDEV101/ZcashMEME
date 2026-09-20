@@ -39,3 +39,6 @@ config/localnet.json
 shots/
 dist/
 node_modules/
+
+# vendored third-party tooling, not part of the product
+.claude/skills/impeccable/
