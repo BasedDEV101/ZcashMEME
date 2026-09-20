@@ -403,6 +403,14 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // data loss and blocks every save from then on.
     const previous = (Array.isArray(cached?.collections) ? (cached.collections as Collection[]) : [])
       .filter((c) => c?.mint && eligible(c)).length;
+    // A rebuild that found fewer coins than the last complete reading is a
+    // worse answer, not a newer one. Refusing to SAVE it was not enough: it
+    // was still served for that request and cached at the edge for two
+    // minutes, which is what the leaderboard's 69 -> 60 -> 1 flicker actually
+    // was. When we know the stored reading is better, that is the one to send.
+    if (snapshot.readable && cached && ranked.length < previous) {
+      return json(res, 200, { ...cached, stale: true }, 60);
+    }
     if (snapshot.readable && mintsRead && ranked.length >= previous && ranked.length > 0) {
       await saveSnapshot(body);
     }
