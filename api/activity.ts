@@ -18,9 +18,9 @@
 // filter can never drop a valid burn.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { json, readOnchainMetadata, readPumpCreate, rpc } from "./_rpc.ts";
+import { decodeBase58, inParallel, json, lamportsTransferredTo, readOnchainMetadata, readPumpCreate, rpc } from "./_rpc.ts";
 import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.ts";
-import { normalizeTransaction, resolveKeys } from "../src/solana/normalize.ts";
+import { normalizeTransaction, resolveKeys, type RpcTransaction } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
 import type { BridgeConfig } from "../src/core/types.ts";
 import { LAUNCH_FEE_LAMPORTS, OPERATOR_ADDRESS, FLAGSHIP } from "./_launchpad.ts";
@@ -28,7 +28,8 @@ import history from "./_history.json" with { type: "json" };
 
 const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 const FEE_PAGES = 10;      // operator history: low volume, read it all
-const BURN_PAGES = 4;      // per mint, newest first; older burns come from the snapshot
+const BURN_PAGES = 2;      // per mint, newest first; older burns come from the snapshot
+const WIDTH = 5;           // concurrent RPC streams
 const MAX_FETCH = 160;     // transactions per request, across all mints
 const MAX_BURN_ROWS = 300;
 
@@ -41,6 +42,9 @@ export interface Burn {
 export interface Collection {
   mint: string; symbol: string; name: string | null; image: string | null;
   minWholeTokens: string; signature: string | null;
+  /** Raw supply the coin was created with, when its launch tx is ours to
+      read. Null for a coin registered here after launching elsewhere. */
+  initialSupply: string | null;
   launchedAt: number | null; launchedBy: string | null;
   decimals: number;
   burnedTokens: string;   // whole tokens destroyed under the protocol rule
@@ -58,7 +62,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     const uris = new Map<string, string>();
     collections.set(FLAGSHIP.mint, {
       mint: FLAGSHIP.mint, symbol: FLAGSHIP.symbol, name: FLAGSHIP.name, image: FLAGSHIP.image,
-      minWholeTokens: FLAGSHIP.minWholeTokens, signature: null,
+      minWholeTokens: FLAGSHIP.minWholeTokens, signature: null, initialSupply: null,
       launchedAt: FLAGSHIP.launchedAt, launchedBy: null, decimals: 6,
       burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
     });
@@ -74,15 +78,21 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
 
     // oldest first, so the first launch of a mint is the one that counts
     const paid = sigs.filter((s) => !s.err && s.memo?.includes(REQUEST_PREFIX)).reverse();
-    for (const s of paid) {
-      let raw;
+    // Fetched in parallel but folded in order below, so which launch of a mint
+    // wins does not depend on which request happened to answer first.
+    const launchTxs = new Map<string, RpcTransaction>();
+    await inParallel(paid, WIDTH, async (s) => {
       try {
-        raw = await r.getTransaction(s.signature, "finalized");
+        const raw = await r.getTransaction(s.signature, "finalized");
+        if (raw) launchTxs.set(s.signature, raw);
       } catch {
         // A launch we could not read this time is missing from the list, not
         // wrong in it. Better a short leaderboard than no leaderboard.
-        continue;
       }
+    });
+
+    for (const s of paid) {
+      const raw = launchTxs.get(s.signature);
       if (!raw) continue;
       const tx = normalizeTransaction(raw, { finalized: true });
       if (!tx.succeeded || tx.memos.length !== 1) continue;
@@ -91,10 +101,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
 
       // The fee must actually have been paid, or anyone could list for free.
       const keys = resolveKeys(raw);
-      const i = keys.indexOf(OPERATOR_ADDRESS);
-      const bal = raw.meta as { preBalances?: number[]; postBalances?: number[] } | null;
-      const received = i >= 0 ? BigInt(bal?.postBalances?.[i] ?? 0) - BigInt(bal?.preBalances?.[i] ?? 0) : 0n;
-      if (received < LAUNCH_FEE_LAMPORTS) continue;
+      if (lamportsTransferredTo(raw, keys, OPERATOR_ADDRESS) < LAUNCH_FEE_LAMPORTS) continue;
 
       // Name and image come from the create instruction in this same
       // transaction, so they are what the coin actually launched with. A coin
@@ -106,9 +113,18 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         if (meta && meta.symbol.toUpperCase() === req.symbol) { name = meta.name; uris.set(req.mint, meta.uri); }
       }
 
+      // Supply minted by the create itself. Used only to skip scanning a coin
+      // whose supply has never moved -- a burn always reduces supply, so
+      // "supply unchanged" is proof of "no burns" and saves listing its
+      // history entirely.
+      const minted = (raw.meta?.postTokenBalances ?? [])
+        .filter((b) => b.mint === req.mint)
+        .reduce((t, b) => t + BigInt(b.uiTokenAmount.amount), 0n);
+
       collections.set(req.mint, {
         mint: req.mint, symbol: req.symbol, name, image: null,
         minWholeTokens: req.minWholeTokens.toString(), signature: tx.signature,
+        initialSupply: minted > 0n ? minted.toString() : null,
         launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
       });
@@ -124,7 +140,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // history already lives in the snapshot, so it must not spend the whole
     // per-request fetch budget before a day-old coin gets looked at.
     const scanOrder = [...collections.values()].sort((a, b) => (b.launchedAt ?? 0) - (a.launchedAt ?? 0));
-    for (const c of scanOrder) {
+    await inParallel(scanOrder, WIDTH, async (c) => {
       try {
         await scanMint(r, c, rows, () => fetched, (n) => { fetched = n; });
       } catch {
@@ -133,16 +149,22 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         // partial, rather than the page going blank.
         partial = true;
       }
-    }
+    });
 
     async function scanMint(
       r: ReturnType<typeof rpc>, c: Collection, rows: Map<string, Burn>,
       getFetched: () => number, setFetched: (n: number) => void,
     ): Promise<void> {
       const info = await r.getAccountInfo(c.mint);
-      const parsed = (info.value?.data as { parsed?: { info?: { decimals?: number } } } | undefined)?.parsed;
+      const parsed = (info.value?.data as { parsed?: { info?: { decimals?: number; supply?: string } } } | undefined)?.parsed;
       if (!info.value || typeof parsed?.info?.decimals !== "number") return;
       c.decimals = parsed.info.decimals;
+
+      // Nothing has been burned, so there is nothing to find: skip the scan.
+      // Listing a pump.fun mint's signatures is the expensive part of this
+      // request -- fourteen of them in sequence took 114 seconds -- and most
+      // coins on the pad have never had a single token destroyed.
+      if (c.initialSupply && parsed.info.supply === c.initialSupply) return;
       if (!c.name) {
         const meta = await readOnchainMetadata(r, c.mint, parsed.info);
         if (meta) { c.name = meta.name; if (meta.uri) uris.set(c.mint, meta.uri); }
@@ -224,22 +246,8 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
       historyUpdated: (history as { updated: string | null }).updated,
       partial,
-    });
+    }, 120);
   } catch (e) {
     return json(res, 502, { error: (e as Error).message, collections: [], burns: [] });
   }
-}
-
-const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function decodeBase58(s: string): Uint8Array {
-  let n = 0n;
-  for (const c of s) {
-    const v = B58.indexOf(c);
-    if (v < 0) return new Uint8Array();
-    n = n * 58n + BigInt(v);
-  }
-  const bytes: number[] = [];
-  while (n > 0n) { bytes.unshift(Number(n & 0xffn)); n >>= 8n; }
-  for (const c of s) { if (c !== "1") break; bytes.unshift(0); }
-  return Uint8Array.from(bytes);
 }

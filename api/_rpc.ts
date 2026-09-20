@@ -4,6 +4,7 @@
 // our JSON, not our endpoint.
 
 import { SolanaRpc, FailoverRpc, DEFAULT_RPC } from "../src/solana/rpc.ts";
+import type { RpcTransaction } from "../src/solana/normalize.ts";
 
 /** The paid endpoint, with the public one behind it. */
 export const rpc = (): SolanaRpc => new FailoverRpc(process.env.SOLANA_RPC || DEFAULT_RPC, DEFAULT_RPC, 2);
@@ -88,4 +89,63 @@ export async function readOnchainMetadata(
   } catch {
     return null;
   }
+}
+
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
+const SYSTEM_TRANSFER = 2;
+
+/**
+ * Lamports actually transferred to `to` by this transaction.
+ *
+ * Reads the transfer instructions rather than the account's balance change,
+ * because those are not the same question. A launch paid from the operator's
+ * own wallet transfers the fee AND pays the network and pump.fun costs, so its
+ * net balance change is negative — and a balance check called that an unpaid
+ * launch and dropped a real coin off the site. What matters is whether the fee
+ * was sent, not whether the wallet came out ahead.
+ */
+export function lamportsTransferredTo(raw: RpcTransaction, keys: string[], to: string): bigint {
+  const inner = (raw.meta?.innerInstructions ?? []).flatMap((g) => g.instructions);
+  let total = 0n;
+  for (const ix of [...(raw.transaction.message.instructions ?? []), ...inner]) {
+    if (keys[ix.programIdIndex] !== SYSTEM_PROGRAM) continue;
+    if (ix.accounts.length < 2 || keys[ix.accounts[1]] !== to) continue;
+    const data = decodeBase58(ix.data);
+    if (data.length < 12) continue;
+    const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    if (dv.getUint32(0, true) !== SYSTEM_TRANSFER) continue;
+    total += dv.getBigUint64(4, true);
+  }
+  return total;
+}
+
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+export function decodeBase58(s: string): Uint8Array {
+  let n = 0n;
+  for (const c of s) {
+    const v = B58.indexOf(c);
+    if (v < 0) return new Uint8Array();
+    n = n * 58n + BigInt(v);
+  }
+  const bytes: number[] = [];
+  while (n > 0n) { bytes.unshift(Number(n & 0xffn)); n >>= 8n; }
+  for (const c of s) { if (c !== "1") break; bytes.unshift(0); }
+  return Uint8Array.from(bytes);
+}
+
+/**
+ * Run `work` over every item, at most `width` at a time.
+ *
+ * Scanning fourteen mints one after another took 114 seconds, which is longer
+ * than a visitor will wait and longer than the cache buys back on a cold hit.
+ * They do not depend on each other, so they should not queue behind each
+ * other — but firing all of them at once is how the RPC starts returning 429s,
+ * hence a width rather than Promise.all.
+ */
+export async function inParallel<T>(items: T[], width: number, work: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const runners = Array.from({ length: Math.min(width, items.length) }, async () => {
+    for (let i = next++; i < items.length; i = next++) await work(items[i]);
+  });
+  await Promise.all(runners);
 }

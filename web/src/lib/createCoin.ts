@@ -63,7 +63,14 @@ export async function buildLaunch(payer: PublicKey, uri: string, d: CoinDetails)
     name: d.name,
     symbol: d.symbol,
     uri,
-    creator: payer,
+    // Every coin launched here is created under the pad's wallet, so pump.fun's
+    // creator fees fund the pad -- which is what pays for the stamps, the
+    // inscriptions and the bridge that keeps issuing them. The launcher still
+    // signs, still pays and still owns whatever they buy; what they give up is
+    // the creator fee stream. That is a real thing to give up, so the launch
+    // page states it outright rather than leaving it to be discovered on
+    // chain. `user` stays the launcher: they pay for the launch, not us.
+    creator: new PublicKey(OPERATOR_ADDRESS),
     user: payer,
     // Never on. Mayhem doubles the supply to 2B and lets pump's agent burn
     // tokens on its own -- burns nobody authorised, which would mint stamps

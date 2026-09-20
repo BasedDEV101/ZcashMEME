@@ -9,6 +9,7 @@ import { Registry } from "./components/Registry.tsx";
 import { ALLOWANCE_STAMPS, LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
 import { Leaderboard } from "./components/Leaderboard.tsx";
 import { Burns } from "./components/Burns.tsx";
+import { LatestCoins } from "./components/LatestCoins.tsx";
 import { useActivity } from "./lib/activity.ts";
 
 export default function App() {
@@ -73,6 +74,7 @@ function Page() {
               what happened.
             </p>
           </section>
+          <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={9} />
           <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} />
           <Burns burns={data?.burns ?? []} loading={loading} error={error} />
           <Footer />
@@ -107,6 +109,13 @@ function Page() {
                   its collection. You cannot end up with a coin and no collection, or a paid fee and no
                   coin.
                 </Warning>
+                <Warning title="The pad is the creator, and keeps the creator fees">
+                  Your coin is created under this pad's wallet, so pump.fun's creator fee on every trade
+                  goes to it, not to you. That is what pays to inscribe your holders' stamps. You still
+                  sign the launch, still pay for it, and still own every token you buy — what you are
+                  giving up is that fee stream, permanently and with no way to change it later. If you
+                  want the creator fees, launch on pump.fun directly instead.
+                </Warning>
                 <Warning title="Mayhem mode is off">
                   It would double the supply and let pump's agent burn tokens on its own — burns nobody
                   authorised, which would issue stamps and wreck your collection's accounting.
@@ -131,6 +140,12 @@ function Page() {
             </div>
           </section>
 
+          <LatestCoins
+            collections={data?.collections ?? []}
+            loading={loading}
+            error={error}
+            onMore={() => go("/leaderboard")}
+          />
           <Registry collections={collections} updated={updated} />
           <Footer />
         </main>
@@ -202,6 +217,13 @@ function Page() {
             </aside>
           </div>
         </section>
+
+        <LatestCoins
+          collections={data?.collections ?? []}
+          loading={loading}
+          error={error}
+          onMore={() => go("/leaderboard")}
+        />
 
         <Burns
           burns={data?.burns ?? []}
