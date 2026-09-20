@@ -18,6 +18,10 @@ redemption promise. It is "1:1 converted", never "1:1 backed".
 cites a real, unclaimed burn and is delivered to the address that burner chose. A stolen minter key can
 waste fee ZEC and nothing else — [proved on the real testnet](docs/PROGRESS.md), not just in tests.
 
+> **Earlier work:** the original ZIP 227 CLI sandbox — issuance-key derivation, asset IDs and a mocked
+> lifecycle against the draft spec — is preserved on the [`master`](../../tree/master) branch. It targets a
+> retired token and is kept for reference, not maintained.
+
 ## Status
 
 Working end to end on **local Solana + Zcash testnet**. Nothing has touched mainnet.
