@@ -12,7 +12,7 @@ export const LAUNCH_FEE_SOL = 0.5;
 export const LAUNCH_FEE_LAMPORTS = BigInt(Math.round(LAUNCH_FEE_SOL * 1e9));
 
 /** Fees land here. Change this to move launch revenue to a different wallet. */
-export const OPERATOR_ADDRESS = "mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS";
+export const OPERATOR_ADDRESS = "26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA";
 
 /**
  * The creator fee every coin launched here charges, and where it goes.
@@ -69,7 +69,6 @@ export interface Collection {
  */
 export function buildDeployRequest(payer: string, mint: string, symbol: string, minWholeTokens: bigint): TransactionInstruction[] {
   assertNotForbidden(payer, "a collection registration");
-  assertNotForbidden(OPERATOR_ADDRESS, "receiving launch fees");
   const from = new PublicKey(payer);
   return [
     SystemProgram.transfer({

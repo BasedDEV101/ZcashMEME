@@ -12,7 +12,20 @@ export const LAUNCH_FEE_LAMPORTS = 500_000_000n;
  * was charged, so this only ever moves down.
  */
 export const MIN_ACCEPTED_FEE_LAMPORTS = 100_000_000n;
-export const OPERATOR_ADDRESS = "mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS";
+export const OPERATOR_ADDRESS = "26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA";
+
+/**
+ * Addresses that have ever collected launch fees, newest first.
+ *
+ * Discovery reads all of them, not just the current one. Every coin on the
+ * pad so far paid mAQdwb…, and pointing discovery at the new address alone
+ * would have emptied the leaderboard of all 69 of them for having paid the
+ * address that was correct at the time.
+ */
+export const FEE_ADDRESSES = [
+  "26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA",
+  "mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS",
+];
 
 /** $STAMP launched on pump.fun before the pad existed, so it has no deploy
     transaction to be discovered from. It is a collection all the same. */

@@ -23,7 +23,7 @@ import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.t
 import { normalizeTransaction, resolveKeys, type RpcTransaction } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
 import type { BridgeConfig } from "../src/core/types.ts";
-import { LAUNCH_FEE_LAMPORTS, MIN_ACCEPTED_FEE_LAMPORTS, OPERATOR_ADDRESS, FLAGSHIP } from "./_launchpad.ts";
+import { FEE_ADDRESSES, LAUNCH_FEE_LAMPORTS, MIN_ACCEPTED_FEE_LAMPORTS, FLAGSHIP } from "./_launchpad.ts";
 import history from "./_history.json" with { type: "json" };
 
 const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
@@ -96,13 +96,16 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     });
 
     const sigs = [];
-    let before: string | undefined;
-    for (let page = 0; page < FEE_PAGES; page++) {
-      const batch = await r.getSignaturesForAddress(OPERATOR_ADDRESS, { before, limit: 1000 });
-      sigs.push(...batch);
-      if (batch.length < 1000) break;
-      before = batch[batch.length - 1].signature;
+    for (const address of FEE_ADDRESSES) {
+      let before: string | undefined;
+      for (let page = 0; page < FEE_PAGES; page++) {
+        const batch = await r.getSignaturesForAddress(address, { before, limit: 1000 });
+        sigs.push(...batch);
+        if (batch.length < 1000) break;
+        before = batch[batch.length - 1].signature;
+      }
     }
+    sigs.sort((a, b) => b.slot - a.slot);
 
     // oldest first, so the first launch of a mint is the one that counts
     const paid = sigs.filter((s) => !s.err && s.memo?.includes(REQUEST_PREFIX)).reverse();
@@ -134,7 +137,12 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
 
       // The fee must actually have been paid, or anyone could list for free.
       const keys = resolveKeys(raw);
-      if (lamportsTransferredTo(raw, keys, OPERATOR_ADDRESS) < MIN_ACCEPTED_FEE_LAMPORTS) continue;
+      const paidLamports = FEE_ADDRESSES.reduce(
+        (most, address) => {
+          const sent = lamportsTransferredTo(raw, keys, address);
+          return sent > most ? sent : most;
+        }, 0n);
+      if (paidLamports < MIN_ACCEPTED_FEE_LAMPORTS) continue;
 
       // Name and image come from the create instruction in this same
       // transaction, so they are what the coin actually launched with. A coin
