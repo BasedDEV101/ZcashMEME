@@ -12,10 +12,11 @@ export interface SiteConfig {
 }
 
 export const CONFIG: SiteConfig = {
-  // Flipped the day the coin launches on pump.fun; until then the burn panel
-  // says so plainly rather than pretending to be live.
+  // Flipped the day $ZSA launches on pump.fun; until then the burn panel says
+  // so plainly rather than pretending to be live. An earlier token, $ZIP227
+  // (8RSbsKW2...pump), is live on mainnet but is NOT this project.
   launched: false,
-  ticker: "ZIP227",
+  ticker: "ZSA",
   solanaMint: null,
   tokenProgramId: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
   decimals: 6,

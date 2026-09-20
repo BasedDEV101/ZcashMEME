@@ -85,8 +85,9 @@ function Page() {
 
         <footer className="flex flex-wrap items-baseline justify-between gap-4 px-2 py-8 text-sm text-ink-soft">
           <p>
-            ${CONFIG.ticker} · named after ZIP 227, the Zcash specification for shielded assets. Not
-            affiliated with or endorsed by the Zcash Foundation or Electric Coin Co.
+            ${CONFIG.ticker} takes its name from Zcash Shielded Assets, the protocol feature specified in
+            ZIP 227. It is an independent project: not affiliated with, endorsed by, or issued by the
+            Zcash Foundation or Electric Coin Co., and not the shielded asset the specification describes.
           </p>
         </footer>
       </main>
