@@ -18,14 +18,22 @@ export interface UploadedMetadata { uri: string; image: string }
 
 /** Send the image and details to our own storage; pump.fun's is closed to us. */
 export async function uploadMetadata(file: File, d: CoinDetails): Promise<UploadedMetadata> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("name", d.name);
-  form.append("symbol", d.symbol);
-  form.append("description", d.description);
-  form.append("website", d.website);
-  form.append("twitter", d.twitter);
-  const res = await fetch("/api/metadata", { method: "POST", body: form });
+  // base64 in JSON, not multipart: the function parses JSON reliably and
+  // there is no form boundary handling to go wrong.
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  const res = await fetch("/api/metadata", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: d.name, symbol: d.symbol, description: d.description,
+      website: d.website, twitter: d.twitter,
+      imageType: file.type, imageBase64: btoa(binary),
+    }),
+  });
   const body = (await res.json().catch(() => ({}))) as { uri?: string; image?: string; error?: string };
   if (!res.ok || !body.uri) throw new Error(body.error ?? `Upload failed (${res.status}).`);
   return { uri: body.uri, image: body.image! };

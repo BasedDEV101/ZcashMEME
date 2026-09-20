@@ -12,8 +12,9 @@ page.on("pageerror", (e) => errs.push(String(e)));
 page.on("console", (m) => m.type() === "error" && errs.push(m.text()));
 await page.addInitScript(MOCK);
 
-// Storage is not configured locally, so stand in for the upload.
-await page.route("**/api/metadata", (route) =>
+// STUB_UPLOAD=1 stands in for the upload when storage is unreachable;
+// unset, the run exercises the real /api/metadata.
+if (process.env.STUB_UPLOAD) await page.route("**/api/metadata", (route) =>
   route.fulfill({ status: 200, contentType: "application/json",
     body: JSON.stringify({ uri: "https://example.com/meta.json", image: "https://example.com/i.png" }) }));
 

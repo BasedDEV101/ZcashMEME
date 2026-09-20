@@ -8,7 +8,7 @@ import { CONFIG } from "../lib/config.ts";
 type Stage = "idle" | "uploading" | "signing" | "sending" | "done";
 
 export function CreateCoinPanel() {
-  const { publicKey, connected, connecting, connect, select, wallet, wallets, sendTransaction } = useWallet();
+  const { publicKey, connected, connecting, connect, disconnect, select, wallet, wallets, sendTransaction } = useWallet();
   const [d, setD] = useState<CoinDetails>({
     name: "", symbol: "", description: "", website: "", twitter: "", minWholeTokens: 1_000_000n,
   });
@@ -89,7 +89,16 @@ export function CreateCoinPanel() {
         {connecting ? (
           <p className="text-sm text-ink-soft">Connecting…</p>
         ) : connected && publicKey ? (
-          <p className="tnum font-data text-sm break-all text-ink">{publicKey.toBase58()}</p>
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <p className="tnum font-data text-sm break-all text-ink">{publicKey.toBase58()}</p>
+            <button
+              type="button"
+              onClick={() => { disconnect().catch(() => {}); setError(null); }}
+              className="font-body text-[0.62rem] font-semibold tracking-[0.16em] text-ink-soft uppercase underline underline-offset-4 transition-colors hover:text-stamp-deep"
+            >
+              Disconnect
+            </button>
+          </div>
         ) : wallets.length === 0 ? (
           <p className="text-sm text-ink-soft">No Solana wallet detected. Install Phantom or Solflare, then reload.</p>
         ) : (
