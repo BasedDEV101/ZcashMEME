@@ -12,12 +12,16 @@ export interface SiteConfig {
 }
 
 export const CONFIG: SiteConfig = {
-  // Flipped the day $ZSA launches on pump.fun; until then the burn panel says
-  // so plainly rather than pretending to be live. An earlier token, $ZIP227
-  // (8RSbsKW2...pump), is live on mainnet but is NOT this project.
-  launched: false,
+  // Values read from chain, never assumed: Token-2022, 6 decimals, 1B supply,
+  // mint authority revoked, no freeze authority. Created at slot 448811893.
+  //
+  // `launched` stays false until the bridge is running and the minter funded.
+  // Enabling it earlier would let people burn irreversibly and receive
+  // nothing. An earlier token, $ZIP227 (8RSbsKW2...pump), is live on mainnet
+  // but is NOT this project.
+  launched: false, // flip when the bridge is running and funded
   ticker: "ZSA",
-  solanaMint: null,
+  solanaMint: "EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc",
   tokenProgramId: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
   decimals: 6,
   minBurnTokens: 1_000_000n,

@@ -1,0 +1,12 @@
+{
+  "network": "mainnet",
+  "rpc": "https://api.mainnet-beta.solana.com",
+  "solanaMint": "EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc",
+  "tokenProgramId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  "decimals": 6,
+  "supply": "1000000000",
+  "minBurnRaw": "1000000000000",
+  "startSlot": 448811893,
+  "zcashNetwork": "main",
+  "protocol": "zsam"
+}
