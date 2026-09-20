@@ -1,0 +1,13 @@
+{
+  "network": "mainnet-smoke",
+  "rpc": "https://api.mainnet-beta.solana.com",
+  "solanaMint": "3wbaQNg7QYnNV5izLUTqoGXeFDGj657T6HnbQmAap9Ye",
+  "tokenProgramId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  "decimals": 6,
+  "supply": "1000000000",
+  "minBurnRaw": "1000000000000",
+  "startSlot": 448759305,
+  "zcashNetwork": "main",
+  "protocol": "zsamtest",
+  "holderAta": "GquAMCenGErjNvJo8NezUvrQDW9JM963ajuiHKEw1Q4Y"
+}

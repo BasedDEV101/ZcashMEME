@@ -5,7 +5,13 @@ import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
 import { decodeEnvelope, assemble, commitment } from "../src/zcash/inscription.ts";
 import { parseNftContent } from "../src/core/nft.ts";
 import { parseScript, hex } from "../src/zcash/script.ts";
+import { readFileSync } from "node:fs";
 
+// Protocol tag comes from config, not a hardcoded default: the mainnet
+// rehearsal uses a separate tag so its inscriptions can never be mistaken for
+// the real collection.
+const cfgFile = process.env.BRIDGE_CONFIG;
+const PROTOCOL = process.env.PROTOCOL ?? (cfgFile ? JSON.parse(readFileSync(cfgFile, "utf8")).protocol : "zsam");
 const txidHex = process.argv[2];
 if (!txidHex) throw new Error("usage: verify-inscription.ts <reveal-txid>");
 const lwd = new Lightwalletd(process.env.LIGHTWALLETD ?? "testnet.zec.rocks:443");
@@ -28,9 +34,9 @@ console.log(`content type: ${env.contentType}`);
 console.log(`content: ${new TextDecoder().decode(content)}`);
 console.log(`commitment matches content: ${env.commitment && hex(env.commitment) === hex(commitment(env.contentType, content))}`);
 
-const nft = parseNftContent(content, "zsam");
+const nft = parseNftContent(content, PROTOCOL);
 if (!nft) throw new Error("content is not canonical protocol content");
-console.log(`\nNFT decoded:`);
+console.log(`\nNFT decoded (protocol ${PROTOCOL}):`);
 console.log(`  solana mint : ${nft.mint}`);
 console.log(`  burn sig    : ${nft.burn}`);
 console.log(`  amount      : ${nft.amt} raw`);

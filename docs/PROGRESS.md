@@ -2,6 +2,40 @@
 
 Overnight build, 2026-09-19 → 20. Everything below was **run**, not asserted. Nothing has touched mainnet.
 
+## Mainnet dress rehearsal — done 2026-09-20
+
+Real money, real fees, real consensus, on **both mainnets**, using a throwaway token so nothing of value
+was destroyed. Test inscriptions carry protocol tag `zsamtest`, never `zsam`, so they can never be
+confused with the real collection.
+
+```
+Solana mainnet
+  throwaway Token-2022 mint 3wbaQNg7QYnNV5izLUTqoGXeFDGj657T6HnbQmAap9Ye
+    1B supply, mint authority revoked (pump.fun shape)
+  burn RcxGYhJtLLmZ…  1,500,000 tokens + memo "t1P2GcxG…"
+        ▼
+Zcash MAINNET
+  commit 09c6f37b77ba…   10,000 zat
+  reveal b2cbded5c37c…   20,000 zat
+  NFT #1  b2cbded5c37c…i0  ->  t1P2GcxGhzeM5tPk3r3JsGh1tEVArD4C2fB
+
+ledger rebuilt from both mainnets:
+  represented by NFTs : 1,500,000 tokens
+  validly burned      : 1,500,000 tokens     invariant OK
+```
+
+Fetched back off Zcash mainnet and decoded independently: correct content type, the exact burn signature,
+amount and recipient; the v1 commitment verifies.
+
+**Funding.** The operator had SOL but no ZEC, so 0.05 SOL was swapped to 0.00355 ZEC through NEAR Intents,
+which pays out to transparent addresses. Cost of the whole rehearsal: **0.0526 SOL + 30,000 zat** (~$6).
+0.0033 ZEC (~10 more inscriptions) and 0.047 SOL remain.
+
+**One intermittent issue.** Twice, a burn sent immediately after creating its token account failed preflight
+with `IncorrectProgramId`, then succeeded on retry with no change — an RPC state race on a
+just-created account, seen on both localnet and mainnet. It affects only our test scripts; in production
+the burn is built and sent by the holder's own wallet.
+
 ## Working end to end
 
 A real burn on a real Solana validator becomes a real NFT on Zcash testnet:
