@@ -107,11 +107,6 @@ export function Leaderboard({ collections, loading, error, stale }: {
                 <div className="flex flex-wrap items-baseline gap-x-2.5">
                   <span className="font-display text-lg leading-tight text-ink">{c.symbol}</span>
                   {c.name && <span className="truncate text-[0.88rem] text-ink-soft">{c.name}</span>}
-                  {c.graduated && (
-                    <span className="stamped px-1.5 py-0.5 font-display text-[0.55rem] leading-none">
-                      GRADUATED
-                    </span>
-                  )}
                 </div>
                 <a
                   href={`${SOLSCAN}/token/${c.mint}`}
@@ -148,8 +143,9 @@ export function Leaderboard({ collections, loading, error, stale }: {
       <p className="mt-6 max-w-[66ch] text-sm text-ink-soft">
         Burns count only what passed the same rule the bridge uses — a real, finalised burn of that mint,
         above its minimum, with one memo naming a Zcash address. Supply gone counts every token destroyed,
-        including burns that earned nothing. Market cap is read from the coin's own bonding curve, and is
-        blank once it graduates off one.
+        including burns that earned nothing. Market cap is read from wherever the coin actually trades — its bonding
+        curve, or its pump.fun pool once it is on one — and is blank when there is no honest price to
+        read.
       </p>
     </section>
   );
@@ -163,7 +159,7 @@ function headline(c: ActivityCollection, by: Sort): string {
 }
 
 function caption(c: ActivityCollection, by: Sort): string {
-  if (by === "marketCap") return c.graduated ? "off the curve" : "market cap";
+  if (by === "marketCap") return "market cap";
   if (by === "destroyed") return "supply destroyed";
   if (by === "newest") return "launched";
   return `destroyed · ${c.burnCount} ${c.burnCount === 1 ? "certificate" : "certificates"}`;

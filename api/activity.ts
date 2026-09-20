@@ -55,9 +55,12 @@ export interface Collection {
       burnedTokens, and larger when tokens were burned without a memo — those
       earn no certificate but they are still destroyed. */
   destroyedTokens: string | null;
-  /** Market cap in lamports, null once the coin graduates off the curve. */
+  /** Market cap in lamports, null when there is no honest number to give. */
   marketCapLamports: string | null;
   graduated: boolean;
+  /** Raw supply and owning program, read from chain; pricing needs both. */
+  supplyRaw: string | null;
+  tokenProgramId: string | null;
 }
 
 /** How long a rebuild's answer stands before another one is worth doing. */
@@ -88,6 +91,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       launchedAt: FLAGSHIP.launchedAt, launchedBy: null, decimals: 6,
       burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
       destroyedTokens: null, marketCapLamports: null, graduated: false,
+      supplyRaw: null, tokenProgramId: null,
     });
 
     const sigs = [];
@@ -104,13 +108,18 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // Fetched in parallel but folded in order below, so which launch of a mint
     // wins does not depend on which request happened to answer first.
     const launchTxs = new Map<string, RpcTransaction>();
+    let partial = false;
     await inParallel(paid, WIDTH, async (s) => {
       try {
         const raw = await r.getTransaction(s.signature, "finalized");
         if (raw) launchTxs.set(s.signature, raw);
+        else partial = true;
       } catch {
         // A launch we could not read this time is missing from the list, not
-        // wrong in it. Better a short leaderboard than no leaderboard.
+        // wrong in it: the page still renders, but this rebuild is incomplete
+        // and must not be saved over a complete one. Coins vanished from the
+        // leaderboard between refreshes until this counted as partial.
+        partial = true;
       }
     });
 
@@ -151,6 +160,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
         destroyedTokens: null, marketCapLamports: null, graduated: false,
+        supplyRaw: null, tokenProgramId: null,
       });
     }
 
@@ -159,7 +169,6 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     for (const b of (history as { burns: Burn[] }).burns) rows.set(b.signature, b);
 
     let fetched = 0;
-    let partial = false;
     // Newest collections first. The flagship has 1.28M signatures and its
     // history already lives in the snapshot, so it must not spend the whole
     // per-request fetch budget before a day-old coin gets looked at.
@@ -183,6 +192,8 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       const parsed = (info.value?.data as { parsed?: { info?: { decimals?: number; supply?: string } } } | undefined)?.parsed;
       if (!info.value || typeof parsed?.info?.decimals !== "number") return;
       c.decimals = parsed.info.decimals;
+      c.tokenProgramId = info.value.owner;
+      if (typeof parsed.info.supply === "string") c.supplyRaw = parsed.info.supply;
 
       // Nothing has been burned, so there is nothing to find: skip the scan.
       // Listing a pump.fun mint's signatures is the expensive part of this
@@ -250,7 +261,9 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
 
     // ---- 3b. market caps, one call for every coin.
     try {
-      const curves = await readCurves(r, [...collections.keys()]);
+      const curves = await readCurves(r, [...collections.values()]
+        .filter((c) => c.supplyRaw && c.tokenProgramId)
+        .map((c) => ({ mint: c.mint, tokenProgramId: c.tokenProgramId!, supply: BigInt(c.supplyRaw!) })));
       for (const [mint, state] of curves) {
         const c = collections.get(mint);
         if (!c) continue;

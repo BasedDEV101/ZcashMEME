@@ -1,4 +1,16 @@
 {
-  "updated": "2026-09-20T21:57:33.897Z",
-  "burns": []
+  "updated": "2026-09-20T22:11:52.795Z",
+  "burns": [
+    {
+      "signature": "4hCLg38ijA3tiTVwUFbE4ktZBvEPLPLmRHzTMLEx3MeCEMNCDWNTHi4wwYTawAwua2T7jfpvpforJgyd2zyCxDBK",
+      "mint": "EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc",
+      "symbol": "STAMP",
+      "slot": 448814261,
+      "blockTime": 1789929349,
+      "burner": "26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA",
+      "amount": "1000000",
+      "zcashAddress": "t1P2GcxGhzeM5tPk3r3JsGh1tEVArD4C2fB",
+      "ok": true
+    }
+  ]
 }
