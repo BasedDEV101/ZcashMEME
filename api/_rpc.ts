@@ -16,8 +16,16 @@ import type { RpcTransaction } from "../src/solana/normalize.ts";
 import { sha256 } from "@noble/hashes/sha2";
 import { ed25519 } from "@noble/curves/ed25519.js";
 
-/** The paid endpoint, with the public one behind it. */
-export const rpc = (): SolanaRpc => new FailoverRpc(process.env.SOLANA_RPC || DEFAULT_RPC, DEFAULT_RPC, 2);
+/**
+ * Every endpoint we have, tried in order.
+ *
+ * SOLANA_RPC may list several, comma separated. One free-tier key answering
+ * 429 used to empty the market cap column for everyone; with a second key and
+ * the public endpoint behind it, that outage has to happen three times over
+ * before the page notices.
+ */
+export const rpc = (): SolanaRpc =>
+  new FailoverRpc([...(process.env.SOLANA_RPC ?? "").split(",").map((u) => u.trim()), DEFAULT_RPC], 2);
 
 /** Cache at the edge: this data changes per block, not per request. */
 export function json(res: { statusCode: number; setHeader(k: string, v: string): void; end(b: string): void },

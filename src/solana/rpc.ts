@@ -120,17 +120,33 @@ export async function readMint(rpc: SolanaRpc, mint: string): Promise<{ tokenPro
  * endpoint answers, so a failed call is simply asked again elsewhere.
  */
 export class FailoverRpc extends SolanaRpc {
-  private readonly backup: SolanaRpc | null;
-  constructor(primary: string, backup: string, maxRetries = 3) {
-    super(primary, maxRetries);
-    this.backup = primary === backup ? null : new SolanaRpc(backup, maxRetries);
+  private readonly backups: SolanaRpc[];
+
+  /**
+   * @param endpoints Tried in order. Duplicates are dropped, so passing the
+   *   same URL twice cannot turn one outage into two identical attempts.
+   */
+  constructor(endpoints: string[], maxRetries = 3) {
+    const unique = [...new Set(endpoints.filter(Boolean))];
+    if (unique.length === 0) throw new Error("FailoverRpc needs at least one endpoint");
+    super(unique[0], maxRetries);
+    this.backups = unique.slice(1).map((url) => new SolanaRpc(url, maxRetries));
   }
+
   override async call<T>(method: string, params: unknown[]): Promise<T> {
+    let last: unknown;
     try {
       return await super.call<T>(method, params);
     } catch (e) {
-      if (!this.backup) throw e;
-      return this.backup.call<T>(method, params);
+      last = e;
     }
+    for (const backup of this.backups) {
+      try {
+        return await backup.call<T>(method, params);
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last;
   }
 }

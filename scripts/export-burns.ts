@@ -29,7 +29,7 @@ if (!mint || !symbol) throw new Error("usage: export-burns.ts <mint> <SYMBOL> <m
 // so walking a million signatures cannot rate-limit the page.
 const url = process.env.SOLANA_RPC ?? solanaRpcUrl();
 console.log(`scanning ${symbol} ${mint} via ${describeRpc(url)}`);
-const rpc = new FailoverRpc(url, PUBLIC_RPC_FALLBACK);
+const rpc = new FailoverRpc([...url.split(",").map((u) => u.trim()), PUBLIC_RPC_FALLBACK]);
 const { tokenProgramId, decimals } = await readMint(rpc, mint);
 const unit = 10n ** BigInt(decimals);
 const cfg = {
