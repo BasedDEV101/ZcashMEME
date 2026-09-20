@@ -5,6 +5,16 @@
 
 import { SolanaRpc, FailoverRpc, DEFAULT_RPC } from "../src/solana/rpc.ts";
 import type { RpcTransaction } from "../src/solana/normalize.ts";
+// No Solana SDK here, on purpose. The pump SDK could not be imported at all
+// -- dynamically it threw "Cannot use import statement outside a module",
+// statically "does not provide an export named 'PumpSdk'" -- and importing
+// web3.js for PublicKey alone dragged in rpc-websockets, which throws
+// ERR_REQUIRE_ESM in this runtime. Each attempt took the whole endpoint down
+// with it. All that is actually needed is program-address derivation, which
+// is fifteen lines, so it is written out here against @noble primitives that
+// this repo already depends on and already trusts for signing.
+import { sha256 } from "@noble/hashes/sha2";
+import { ed25519 } from "@noble/curves/ed25519.js";
 
 /** The paid endpoint, with the public one behind it. */
 export const rpc = (): SolanaRpc => new FailoverRpc(process.env.SOLANA_RPC || DEFAULT_RPC, DEFAULT_RPC, 2);
@@ -63,13 +73,12 @@ export async function readOnchainMetadata(
   if (ext?.state?.name) return { name: ext.state.name, uri: ext.state.uri ?? "" };
 
   try {
-    const { PublicKey } = await import("@solana/web3.js");
-    const [pda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("metadata"), new PublicKey(METAPLEX).toBuffer(), new PublicKey(mint).toBuffer()],
-      new PublicKey(METAPLEX),
-    );
+    const address = encodeBase58(pda(
+      [new TextEncoder().encode("metadata"), decodeBase58(METAPLEX), decodeBase58(mint)],
+      METAPLEX,
+    ));
     const acc = await r.call<{ value: { data: [string, string] } | null }>(
-      "getAccountInfo", [pda.toBase58(), { encoding: "base64", commitment: "finalized" }],
+      "getAccountInfo", [address, { encoding: "base64", commitment: "finalized" }],
     );
     if (!acc.value) return null;
     // key(1) + update authority(32) + mint(32), then name, symbol, uri as
@@ -120,6 +129,16 @@ export function lamportsTransferredTo(raw: RpcTransaction, keys: string[], to: s
 }
 
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+export function encodeBase58(bytes: Uint8Array): string {
+  let n = 0n;
+  for (const b of bytes) n = (n << 8n) | BigInt(b);
+  let s = "";
+  while (n > 0n) { s = B58[Number(n % 58n)] + s; n /= 58n; }
+  for (const b of bytes) { if (b !== 0) break; s = "1" + s; }
+  return s;
+}
+
 export function decodeBase58(s: string): Uint8Array {
   let n = 0n;
   for (const c of s) {
@@ -185,30 +204,74 @@ export async function loadSnapshot(): Promise<Record<string, unknown> | null> {
 }
 
 export interface CurveState {
-  /** Market cap in lamports, or null when there is no honest number to give. */
+  /** Market cap in lamports, or null when there is no honest price to read. */
   marketCapLamports: bigint | null;
-  /** True once the coin trades on the AMM instead of a bonding curve. */
-  graduated: boolean;
 }
 
 const WSOL = "So11111111111111111111111111111111111111112";
 const SPL_TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const ATA_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+const PUMP_AMM_PROGRAM = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA";
+const PUMP_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+const CANONICAL_POOL_INDEX = 0;
 
-/** Quote mints whose reserves are denominated in lamports. */
-const SOL_QUOTES = new Set(["11111111111111111111111111111111", WSOL]);
+const PDA_MARKER = new TextEncoder().encode("ProgramDerivedAddress");
+
+/** True when these bytes are a point on ed25519, i.e. could be a real key. */
+function onCurve(bytes: Uint8Array): boolean {
+  try {
+    ed25519.Point.fromBytes(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
- * Market caps for every coin, from wherever that coin actually trades.
+ * Solana's findProgramAddress: hash the seeds with a bump, and take the first
+ * result that is NOT a valid ed25519 point -- which is what makes a program
+ * address one nobody can hold a key for.
+ */
+function pda(seeds: Uint8Array[], program: string): Uint8Array {
+  const programBytes = decodeBase58(program);
+  for (let bump = 255; bump >= 0; bump--) {
+    const parts = [...seeds, Uint8Array.of(bump), programBytes, PDA_MARKER];
+    const total = parts.reduce((n, p) => n + p.length, 0);
+    const buf = new Uint8Array(total);
+    let o = 0;
+    for (const part of parts) { buf.set(part, o); o += part.length; }
+    const candidate = sha256(buf);
+    if (!onCurve(candidate)) return candidate;
+  }
+  throw new Error(`no program address for ${program}`);
+}
+
+/**
+ * A coin's canonical pump.fun pool, derived the same way the pump SDK derives
+ * it: an authority PDA from the mint, then the pool from that authority and
+ * the trading pair.
+ */
+function poolFor(mint: string): Uint8Array {
+  const text = (s: string) => new TextEncoder().encode(s);
+  const authority = pda([text("pool-authority"), decodeBase58(mint)], PUMP_PROGRAM);
+  const index = Uint8Array.of(CANONICAL_POOL_INDEX & 0xff, (CANONICAL_POOL_INDEX >> 8) & 0xff);
+  return pda([text("pool"), index, authority, decodeBase58(mint), decodeBase58(WSOL)], PUMP_AMM_PROGRAM);
+}
+
+const ataFor = (owner: Uint8Array, mint: string, tokenProgram: string) =>
+  pda([owner, decodeBase58(tokenProgram), decodeBase58(mint)], ATA_PROGRAM);
+
+/**
+ * Market caps, from where these coins actually trade.
  *
- * Coins launched through `create_v2` go straight onto pump's AMM: their
- * bonding curve reads complete with zero reserves, so pricing from the curve
- * showed a blank market cap for the entire pad. A coin on the AMM is priced
- * from its pool's own token balances instead -- supply times quote over base.
+ * Coins launched through create_v2 go straight onto pump's AMM -- their
+ * bonding curve reads complete with zero reserves -- so a coin is priced from
+ * its pool's own balances: supply times quote over base. The mint's decimals
+ * cancel between supply and the base reserve, so nothing needs scaling.
  *
- * Reserves are read as SPL token accounts rather than by decoding pump's pool
- * struct. Hand-rolled offsets into pump's structs is exactly what produced the
- * wrong answer before, and a token account's layout has not moved in years.
+ * Reserves are read as ordinary SPL token accounts. Decoding pump's own
+ * structs got the wrong answer twice and then broke the endpoint outright; a
+ * token account's amount has been a u64 at offset 64 for years.
  */
 export async function readCurves(
   r: SolanaRpc, mints: { mint: string; tokenProgramId: string; supply: bigint }[],
@@ -216,41 +279,22 @@ export async function readCurves(
   const out = new Map<string, CurveState>();
   if (mints.length === 0) return out;
 
-  const { PumpSdk, bondingCurvePda, bondingCurveV2Pda, bondingCurveMarketCap, canonicalPumpPoolPda } =
-    await import("@pump-fun/pump-sdk");
-  const { PublicKey } = await import("@solana/web3.js");
-  const sdk = new PumpSdk();
-
-  const ata = (owner: { toBuffer(): Buffer }, mint: string, program: string) =>
-    PublicKey.findProgramAddressSync(
-      [owner.toBuffer(), new PublicKey(program).toBuffer(), new PublicKey(mint).toBuffer()],
-      new PublicKey(ATA_PROGRAM),
-    )[0].toBase58();
-
-  // Four addresses per coin: the two curve locations, then the pool's base and
-  // quote reserves. All fetched together.
   const plan = mints.map((m) => {
-    const pool = canonicalPumpPoolPda(new PublicKey(m.mint));
+    const pool = poolFor(m.mint);
     return {
       ...m,
-      addrs: [
-        bondingCurveV2Pda(m.mint).toBase58(),
-        bondingCurvePda(m.mint).toBase58(),
-        ata(pool, m.mint, m.tokenProgramId),
-        ata(pool, WSOL, SPL_TOKEN),
-      ],
+      addrs: [encodeBase58(ataFor(pool, m.mint, m.tokenProgramId)), encodeBase58(ataFor(pool, WSOL, SPL_TOKEN))],
     };
   });
 
   const flat = plan.flatMap((p) => p.addrs);
-  const accounts: ({ data: [string, string]; owner: string } | null)[] = [];
+  const accounts: ({ data: [string, string] } | null)[] = [];
   for (let i = 0; i < flat.length; i += 100) {
-    const res = await r.call<{ value: ({ data: [string, string]; owner: string } | null)[] }>(
+    const res = await r.call<{ value: ({ data: [string, string] } | null)[] }>(
       "getMultipleAccounts", [flat.slice(i, i + 100), { encoding: "base64", commitment: "finalized" }]);
     accounts.push(...res.value);
   }
 
-  /** An SPL token account's balance: amount is a u64 at offset 64. */
   const balance = (acc: { data: [string, string] } | null): bigint | null => {
     if (!acc) return null;
     const d = Buffer.from(acc.data[0], "base64");
@@ -258,38 +302,11 @@ export async function readCurves(
   };
 
   plan.forEach((p, i) => {
-    const [v2, legacy, base, quote] = accounts.slice(i * 4, i * 4 + 4);
-    const curveAccount = v2 ?? legacy;
-
-    // Still on a curve: price from its reserves.
-    if (curveAccount) {
-      try {
-        const curve = sdk.decodeBondingCurve({
-          data: Buffer.from(curveAccount.data[0], "base64"),
-          owner: new PublicKey(curveAccount.owner), lamports: 0, executable: false,
-        } as never);
-        if (!curve.complete && SOL_QUOTES.has(curve.quoteMint.toBase58()) && !curve.virtualTokenReserves.isZero()) {
-          const cap = bondingCurveMarketCap({
-            mintSupply: curve.tokenTotalSupply,
-            virtualQuoteReserves: curve.virtualQuoteReserves,
-            virtualTokenReserves: curve.virtualTokenReserves,
-          });
-          out.set(p.mint, { marketCapLamports: BigInt(cap.toString()), graduated: false });
-          return;
-        }
-      } catch { /* fall through to the pool */ }
-    }
-
-    // On the AMM: supply x (quote reserve / base reserve). The mint's decimals
-    // cancel between supply and the base reserve, so no scaling is needed.
-    const baseReserve = balance(base);
-    const quoteReserve = balance(quote);
-    if (baseReserve && baseReserve > 0n && quoteReserve !== null) {
-      out.set(p.mint, { marketCapLamports: (p.supply * quoteReserve) / baseReserve, graduated: true });
-      return;
-    }
-    out.set(p.mint, { marketCapLamports: null, graduated: !!curveAccount });
+    const base = balance(accounts[i * 2]);
+    const quote = balance(accounts[i * 2 + 1]);
+    out.set(p.mint, {
+      marketCapLamports: base && base > 0n && quote !== null ? (p.supply * quote) / base : null,
+    });
   });
-
   return out;
 }

@@ -184,12 +184,6 @@ export function CreateCoinPanel() {
           One signature creates the coin on pump.fun, pays the launch fee, and registers its collection.
           Creating a coin also costs the usual pump.fun rent, around 0.02 SOL.
         </p>
-        {/* Said again here, next to the button, because this is where the
-            decision is actually made and it cannot be undone afterwards. */}
-        <p className="mt-2 max-w-[60ch] text-sm text-ink-soft">
-          The coin is created under this pad's wallet, so pump.fun's creator fees go to the pad and pay
-          for your holders' stamps — not to you. This cannot be changed after launch.
-        </p>
         {error && <p className="mt-3 max-w-[58ch] text-sm text-stamp-deep">{error}</p>}
       </div>
     </div>

@@ -81,6 +81,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
 
   try {
     const r = rpc();
+    let priceError: string | null = null;
 
     // ---- 1. collections: the flagship, plus everything launched through the pad.
     const collections = new Map<string, Collection>();
@@ -260,19 +261,21 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     for (const [mint, set] of wallets) collections.get(mint)!.burners = set.size;
 
     // ---- 3b. market caps, one call for every coin.
+    let priceable = [...collections.values()]
+      .filter((c) => c.supplyRaw && c.tokenProgramId)
+      .map((c) => ({ mint: c.mint, tokenProgramId: c.tokenProgramId!, supply: BigInt(c.supplyRaw!) }));
     try {
-      const curves = await readCurves(r, [...collections.values()]
-        .filter((c) => c.supplyRaw && c.tokenProgramId)
-        .map((c) => ({ mint: c.mint, tokenProgramId: c.tokenProgramId!, supply: BigInt(c.supplyRaw!) })));
+      const curves = await readCurves(r, priceable);
       for (const [mint, state] of curves) {
         const c = collections.get(mint);
         if (!c) continue;
         c.marketCapLamports = state.marketCapLamports?.toString() ?? null;
-        c.graduated = state.graduated;
       }
-    } catch {
+    } catch (e) {
       // No market caps this time. The leaderboard still ranks by burns, which
-      // is its default and does not need them.
+      // is its default and does not need them. The reason is reported rather
+      // than swallowed: a silently empty column looks like a broken page.
+      priceError = (e as Error).message;
     }
 
     // ---- 4. images, best effort: a launcher's host being down must not empty
@@ -301,6 +304,9 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
       historyUpdated: (history as { updated: string | null }).updated,
       computedAt: new Date().toISOString(),
+      priced: [...collections.values()].filter((c) => c.marketCapLamports).length,
+      priceable: priceable.length,
+      priceError,
       partial,
       stale: false,
     };

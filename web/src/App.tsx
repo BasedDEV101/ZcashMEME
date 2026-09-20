@@ -110,16 +110,10 @@ function Page() {
                   its collection. You cannot end up with a coin and no collection, or a paid fee and no
                   coin.
                 </Warning>
-                <Warning title={`The fee is ${LAUNCH_FEE_SOL} SOL, and it is not the point`}>
-                  It is there so that filling the register with junk costs something. The pad earns from
-                  the creator fees below, not from charging you to launch.
-                </Warning>
-                <Warning title="The pad is the creator, and keeps the creator fees">
-                  Your coin is created under this pad's wallet, so pump.fun's creator fee on every trade
-                  goes to it, not to you. That is what pays to inscribe your holders' stamps. You still
-                  sign the launch, still pay for it, and still own every token you buy — what you are
-                  giving up is that fee stream, permanently and with no way to change it later. If you
-                  want the creator fees, launch on pump.fun directly instead.
+                <Warning title="The coin is yours">
+                  You are the creator on pump.fun, so the creator fees on every trade go to you. The
+                  {" "}{LAUNCH_FEE_SOL} SOL launch fee is all the pad takes, and it is there so that
+                  filling the register with junk costs something.
                 </Warning>
                 <Warning title="Mayhem mode is off">
                   It would double the supply and let pump's agent burn tokens on its own — burns nobody
