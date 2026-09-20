@@ -1,0 +1,234 @@
+// What the launchpad has actually done: every collection on it, and every
+// burn against those collections.
+//
+// The source of truth is both chains, not a database we keep. A launch is a
+// transaction that paid the fee and carried a deploy memo, so listing the
+// operator address's history IS the list of launches. A burn is judged by
+// evaluateBurn — the same rule the bridge uses — so what this page calls a
+// burn and what actually earns a certificate cannot drift apart.
+//
+// Ranking is by burns verified under that rule, not by how far supply has
+// fallen. Supply falls for reasons that have nothing to do with us, and
+// crediting a collection for those would be a number we cannot stand behind.
+//
+// Scanning is bounded: a traded mint carries millions of signatures, so each
+// pass reads only the newest window and merges the older history from
+// _history.json (written by scripts/export-burns.ts). Only signatures whose
+// listing already carries a memo are fetched — SPEC 3.8 requires one, so that
+// filter can never drop a valid burn.
+
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { json, readPumpCreate, rpc } from "./_rpc.ts";
+import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.ts";
+import { normalizeTransaction, resolveKeys } from "../src/solana/normalize.ts";
+import { evaluateBurn } from "../src/core/validity.ts";
+import type { BridgeConfig } from "../src/core/types.ts";
+import { LAUNCH_FEE_LAMPORTS, OPERATOR_ADDRESS, FLAGSHIP } from "./_launchpad.ts";
+import history from "./_history.json" with { type: "json" };
+
+const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+const FEE_PAGES = 10;      // operator history: low volume, read it all
+const BURN_PAGES = 4;      // per mint, newest first; older burns come from the snapshot
+const MAX_FETCH = 160;     // transactions per request, across all mints
+const MAX_BURN_ROWS = 300;
+
+export interface Burn {
+  signature: string; mint: string; symbol: string; slot: number; blockTime: number | null;
+  burner: string | null; amount: string | null; zcashAddress: string | null;
+  ok: boolean; reason?: string;
+}
+
+export interface Collection {
+  mint: string; symbol: string; name: string | null; image: string | null;
+  minWholeTokens: string; signature: string | null;
+  launchedAt: number | null; launchedBy: string | null;
+  decimals: number;
+  burnedTokens: string;   // whole tokens destroyed under the protocol rule
+  burnCount: number;      // certificates earned
+  refusedCount: number;
+  burners: number;        // distinct wallets that burned
+}
+
+export default async function handler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try {
+    const r = rpc();
+
+    // ---- 1. collections: the flagship, plus everything launched through the pad.
+    const collections = new Map<string, Collection>();
+    const uris = new Map<string, string>();
+    collections.set(FLAGSHIP.mint, {
+      mint: FLAGSHIP.mint, symbol: FLAGSHIP.symbol, name: FLAGSHIP.name, image: FLAGSHIP.image,
+      minWholeTokens: FLAGSHIP.minWholeTokens, signature: null,
+      launchedAt: FLAGSHIP.launchedAt, launchedBy: null, decimals: 6,
+      burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
+    });
+
+    const sigs = [];
+    let before: string | undefined;
+    for (let page = 0; page < FEE_PAGES; page++) {
+      const batch = await r.getSignaturesForAddress(OPERATOR_ADDRESS, { before, limit: 1000 });
+      sigs.push(...batch);
+      if (batch.length < 1000) break;
+      before = batch[batch.length - 1].signature;
+    }
+
+    // oldest first, so the first launch of a mint is the one that counts
+    const paid = sigs.filter((s) => !s.err && s.memo?.includes(REQUEST_PREFIX)).reverse();
+    for (const s of paid) {
+      const raw = await r.getTransaction(s.signature, "finalized");
+      if (!raw) continue;
+      const tx = normalizeTransaction(raw, { finalized: true });
+      if (!tx.succeeded || tx.memos.length !== 1) continue;
+      const req = parseDeployRequest(tx.memos[0]);
+      if (!req || collections.has(req.mint)) continue;
+
+      // The fee must actually have been paid, or anyone could list for free.
+      const keys = resolveKeys(raw);
+      const i = keys.indexOf(OPERATOR_ADDRESS);
+      const bal = raw.meta as { preBalances?: number[]; postBalances?: number[] } | null;
+      const received = i >= 0 ? BigInt(bal?.postBalances?.[i] ?? 0) - BigInt(bal?.preBalances?.[i] ?? 0) : 0n;
+      if (received < LAUNCH_FEE_LAMPORTS) continue;
+
+      // Name and image come from the create instruction in this same
+      // transaction, so they are what the coin actually launched with. A coin
+      // registered after launching elsewhere has none, and shows its ticker.
+      let name: string | null = null;
+      for (const ix of raw.transaction.message.instructions ?? []) {
+        if (keys[ix.programIdIndex] !== PUMP) continue;
+        const meta = readPumpCreate(decodeBase58(ix.data));
+        if (meta && meta.symbol.toUpperCase() === req.symbol) { name = meta.name; uris.set(req.mint, meta.uri); }
+      }
+
+      collections.set(req.mint, {
+        mint: req.mint, symbol: req.symbol, name, image: null,
+        minWholeTokens: req.minWholeTokens.toString(), signature: tx.signature,
+        launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
+        burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
+      });
+    }
+
+    // ---- 2. burns, newest window per mint, merged with the history snapshot.
+    const rows = new Map<string, Burn>();
+    for (const b of (history as { burns: Burn[] }).burns) rows.set(b.signature, b);
+
+    let fetched = 0;
+    let partial = false;
+    // Newest collections first. The flagship has 1.28M signatures and its
+    // history already lives in the snapshot, so it must not spend the whole
+    // per-request fetch budget before a day-old coin gets looked at.
+    const scanOrder = [...collections.values()].sort((a, b) => (b.launchedAt ?? 0) - (a.launchedAt ?? 0));
+    for (const c of scanOrder) {
+      try {
+        await scanMint(r, c, rows, () => fetched, (n) => { fetched = n; });
+      } catch {
+        // A throttled or failing RPC on one mint leaves that mint's recent
+        // window unread. Its history and every other mint still show, flagged
+        // partial, rather than the page going blank.
+        partial = true;
+      }
+    }
+
+    async function scanMint(
+      r: ReturnType<typeof rpc>, c: Collection, rows: Map<string, Burn>,
+      getFetched: () => number, setFetched: (n: number) => void,
+    ): Promise<void> {
+      const info = await r.getAccountInfo(c.mint);
+      const parsed = (info.value?.data as { parsed?: { info?: { decimals?: number } } } | undefined)?.parsed;
+      if (!info.value || typeof parsed?.info?.decimals !== "number") return;
+      c.decimals = parsed.info.decimals;
+      const unit = 10n ** BigInt(c.decimals);
+      const cfg: BridgeConfig = {
+        solanaMint: c.mint, tokenProgramId: info.value.owner, decimals: c.decimals,
+        minBurnRaw: BigInt(c.minWholeTokens) * unit, startSlot: 0,
+        zcashNetwork: "main", protocol: "zsam",
+      };
+
+      const mintSigs = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < BURN_PAGES; page++) {
+        const batch = await r.getSignaturesForAddress(c.mint, { before: cursor, limit: 1000 });
+        mintSigs.push(...batch);
+        if (batch.length < 1000) break;
+        cursor = batch[batch.length - 1].signature;
+      }
+
+      for (const s of mintSigs) {
+        if (!s.memo || s.err || rows.has(s.signature)) continue;
+        if (getFetched() >= MAX_FETCH) break;
+        const raw = await r.getTransaction(s.signature, "finalized");
+        if (!raw) continue;
+        setFetched(getFetched() + 1);
+        const tx = normalizeTransaction(raw, { finalized: true });
+        const burned = tx.burns.find((b) => b.mint === c.mint);
+        if (!burned) continue;   // ordinary memo traffic, not a burn attempt
+        const v = evaluateBurn(tx, cfg);
+        rows.set(tx.signature, v.ok
+          ? { signature: tx.signature, mint: c.mint, symbol: c.symbol, slot: tx.slot, blockTime: tx.blockTime,
+              burner: v.burn.authority, amount: (v.burn.amount / unit).toString(),
+              zcashAddress: v.burn.zcashAddress, ok: true }
+          : { signature: tx.signature, mint: c.mint, symbol: c.symbol, slot: tx.slot, blockTime: tx.blockTime,
+              burner: burned.sourceOwner, amount: (burned.amount / unit).toString(),
+              zcashAddress: null, ok: false, reason: v.reason });
+      }
+    }
+
+    // ---- 3. totals per collection.
+    const wallets = new Map<string, Set<string>>();
+    for (const b of rows.values()) {
+      const c = collections.get(b.mint);
+      if (!c) continue;
+      if (b.ok) {
+        c.burnCount++;
+        c.burnedTokens = (BigInt(c.burnedTokens) + BigInt(b.amount ?? "0")).toString();
+        if (b.burner) (wallets.get(b.mint) ?? wallets.set(b.mint, new Set()).get(b.mint)!).add(b.burner);
+      } else {
+        c.refusedCount++;
+      }
+    }
+    for (const [mint, set] of wallets) collections.get(mint)!.burners = set.size;
+
+    // ---- 4. images, best effort: a launcher's host being down must not empty
+    //         the leaderboard.
+    await Promise.all([...collections.values()].map(async (c) => {
+      const uri = uris.get(c.mint);
+      if (!uri || !/^https:\/\//.test(uri)) return;
+      try {
+        const m = await fetch(uri, { signal: AbortSignal.timeout(4000) });
+        if (!m.ok) return;
+        const meta = (await m.json()) as { image?: string };
+        if (typeof meta.image === "string" && /^https:\/\//.test(meta.image)) c.image = meta.image;
+      } catch { /* leave it without an image */ }
+    }));
+
+    const ranked = [...collections.values()].sort((a, b) => {
+      const d = BigInt(b.burnedTokens) - BigInt(a.burnedTokens);
+      if (d !== 0n) return d > 0n ? 1 : -1;
+      return (b.launchedAt ?? 0) - (a.launchedAt ?? 0);
+    });
+    const burns = [...rows.values()].sort((a, b) => b.slot - a.slot).slice(0, MAX_BURN_ROWS);
+
+    return json(res, 200, {
+      collections: ranked,
+      burns,
+      feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
+      historyUpdated: (history as { updated: string | null }).updated,
+      partial,
+    });
+  } catch (e) {
+    return json(res, 502, { error: (e as Error).message, collections: [], burns: [] });
+  }
+}
+
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function decodeBase58(s: string): Uint8Array {
+  let n = 0n;
+  for (const c of s) {
+    const v = B58.indexOf(c);
+    if (v < 0) return new Uint8Array();
+    n = n * 58n + BigInt(v);
+  }
+  const bytes: number[] = [];
+  while (n > 0n) { bytes.unshift(Number(n & 0xffn)); n >>= 8n; }
+  for (const c of s) { if (c !== "1") break; bytes.unshift(0); }
+  return Uint8Array.from(bytes);
+}

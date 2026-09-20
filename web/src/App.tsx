@@ -7,6 +7,9 @@ import { CONFIG, PROOF, formatTokens } from "./lib/config.ts";
 import { CreateCoinPanel } from "./components/CreateCoinPanel.tsx";
 import { Registry } from "./components/Registry.tsx";
 import { LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
+import { Leaderboard } from "./components/Leaderboard.tsx";
+import { Burns } from "./components/Burns.tsx";
+import { useActivity } from "./lib/activity.ts";
 
 export default function App() {
   const wallets = useMemo(() => [], []);
@@ -25,6 +28,13 @@ function Page() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [updated, setUpdated] = useState<string | null>(null);
   const [route, setRoute] = useState(() => (typeof location !== "undefined" ? location.pathname : "/"));
+  // One read of both chains, shared by the leaderboard, the burn feed and the
+  // home page: three components asking separately would triple the RPC cost
+  // for the same answer.
+  const activity = useActivity();
+  const loading = activity.status === "loading";
+  const error = activity.status === "error" ? activity.message : null;
+  const data = activity.status === "ready" ? activity.data : null;
 
   useEffect(() => {
     fetch("/collections.json")
@@ -44,6 +54,32 @@ function Page() {
     setRoute(path);
     scrollTo({ top: 0 });
   };
+
+  if (route.startsWith("/leaderboard") || route.startsWith("/burns")) {
+    return (
+      <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
+        <main className="mx-auto w-full max-w-5xl space-y-6">
+          <Nav route={route} go={go} />
+          <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
+            <h1 className="font-display text-[1.9rem] leading-none text-engrave sm:text-[2.4rem]">
+              What the pad has done
+            </h1>
+            <div className="mt-5 text-engrave">
+              <GuillocheBand className="h-5 w-full" />
+            </div>
+            <p className="mt-7 max-w-[64ch] text-[0.98rem] leading-relaxed text-ink-soft">
+              Every coin launched here, and every burn against one. Both are read from Solana on each
+              load, not from a list we keep — so this page can be wrong about presentation, never about
+              what happened.
+            </p>
+          </section>
+          <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} />
+          <Burns burns={data?.burns ?? []} loading={loading} error={error} />
+          <Footer />
+        </main>
+      </div>
+    );
+  }
 
   if (route.startsWith("/launch")) {
     return (
@@ -164,6 +200,14 @@ function Page() {
           </div>
         </section>
 
+        <Burns
+          burns={data?.burns ?? []}
+          loading={loading}
+          error={error}
+          limit={8}
+          onMore={() => go("/leaderboard")}
+        />
+
         <WhyAStamp />
 
         <Proof />
@@ -174,10 +218,14 @@ function Page() {
 }
 
 function Nav({ route, go }: { route: string; go: (p: string) => void }) {
-  const here = route.startsWith("/launch") ? "/launch" : "/";
+  const here = route.startsWith("/launch")
+    ? "/launch"
+    : route.startsWith("/leaderboard") || route.startsWith("/burns")
+      ? "/leaderboard"
+      : "/";
   return (
-    <nav className="flex items-baseline gap-6 px-2">
-      {[["/", "Burn"], ["/launch", "Launch a coin"]].map(([path, label]) => (
+    <nav className="flex flex-wrap items-baseline gap-x-6 gap-y-2 px-2">
+      {[["/", "Burn"], ["/launch", "Launch a coin"], ["/leaderboard", "Leaderboard"]].map(([path, label]) => (
         <button
           key={path}
           type="button"
