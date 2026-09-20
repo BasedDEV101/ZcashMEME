@@ -84,9 +84,27 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     let priceError: string | null = null;
 
     // ---- 1. collections: the flagship, plus everything launched through the pad.
+    //
+    // Seeded from the last snapshot rather than rediscovered from nothing. A
+    // launch is immutable history: once a coin has been found, no later
+    // reading of the chain can make it not a launch. Rebuilding the list from
+    // scratch every three minutes meant ~70 getTransaction calls that the
+    // free RPC tiers throttle partway through, and the leaderboard fell 69 ->
+    // 46 -> 24 as each degraded run replaced the last. Now a throttled
+    // rebuild can only delay a NEW coin appearing.
     const collections = new Map<string, Collection>();
     const uris = new Map<string, string>();
-    collections.set(FLAGSHIP.mint, {
+    const knownSignatures = new Set<string>();
+    for (const prior of (Array.isArray(cached?.collections) ? cached.collections : []) as Collection[]) {
+      if (!prior?.mint) continue;
+      collections.set(prior.mint, {
+        ...prior,
+        // Counted fresh below from the burns actually seen this pass.
+        burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
+      });
+      if (prior.signature) knownSignatures.add(prior.signature);
+    }
+    if (!collections.has(FLAGSHIP.mint)) collections.set(FLAGSHIP.mint, {
       mint: FLAGSHIP.mint, symbol: FLAGSHIP.symbol, name: FLAGSHIP.name, image: FLAGSHIP.image,
       minWholeTokens: FLAGSHIP.minWholeTokens, signature: null, initialSupply: null,
       launchedAt: FLAGSHIP.launchedAt, launchedBy: null, decimals: 6,
@@ -111,29 +129,28 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     const paid = sigs.filter((s) => !s.err && s.memo?.includes(REQUEST_PREFIX)).reverse();
     // Fetched in parallel but folded in order below, so which launch of a mint
     // wins does not depend on which request happened to answer first.
+    // Only launches we have never read. Everything else is already seeded.
+    const unseen = paid.filter((s) => !knownSignatures.has(s.signature));
     const launchTxs = new Map<string, RpcTransaction>();
-    // Two different kinds of incomplete. A burn scan that got throttled costs
-    // one coin's recent burns; a launch that could not be read costs the coin
-    // itself, and a rebuild missing coins must never be saved over one that
-    // has them.
+    // A launch that could not be read this pass is simply not added this
+    // pass; the ones already seeded are untouched, so the list only ever
+    // grows and the next rebuild picks up what this one missed.
     let partial = false;
-    let launchesComplete = true;
-    await inParallel(paid, WIDTH, async (s) => {
+    await inParallel(unseen, WIDTH, async (s) => {
       try {
         const raw = await r.getTransaction(s.signature, "finalized");
         if (raw) launchTxs.set(s.signature, raw);
-        else { partial = true; launchesComplete = false; }
+        else partial = true;
       } catch {
         // A launch we could not read this time is missing from the list, not
         // wrong in it: the page still renders, but this rebuild is incomplete
         // and must not be saved over a complete one. Coins vanished from the
         // leaderboard between refreshes until this counted as partial.
         partial = true;
-        launchesComplete = false;
       }
     });
 
-    for (const s of paid) {
+    for (const s of unseen) {
       const raw = launchTxs.get(s.signature);
       if (!raw) continue;
       const tx = normalizeTransaction(raw, { finalized: true });
@@ -344,9 +361,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // as a backstop for any other way of losing coins: the pad only grows, so
     // a shorter list is a worse one.
     const previous = Array.isArray(cached?.collections) ? cached.collections.length : 0;
-    if (launchesComplete && mintsRead && ranked.length >= previous && ranked.length > 0) {
-      await saveSnapshot(body);
-    }
+    if (mintsRead && ranked.length >= previous && ranked.length > 0) await saveSnapshot(body);
     return json(res, 200, body, 120);
   } catch (e) {
     // Ask for the snapshot again rather than trusting the copy read at the
