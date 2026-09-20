@@ -283,7 +283,12 @@ export async function readCurves(
     const pool = poolFor(m.mint);
     return {
       ...m,
-      addrs: [encodeBase58(ataFor(pool, m.mint, m.tokenProgramId)), encodeBase58(ataFor(pool, WSOL, SPL_TOKEN))],
+      addrs: [
+        encodeBase58(ataFor(pool, m.mint, m.tokenProgramId)),
+        encodeBase58(ataFor(pool, WSOL, SPL_TOKEN)),
+        // A coin too young to have a pool is still on its bonding curve.
+        encodeBase58(pda([new TextEncoder().encode("bonding-curve"), decodeBase58(m.mint)], PUMP_PROGRAM)),
+      ],
     };
   });
 
@@ -301,12 +306,30 @@ export async function readCurves(
     return d.length >= 72 ? d.readBigUInt64LE(64) : null;
   };
 
+  /**
+   * A bonding curve's virtual reserves.
+   *
+   * Layout confirmed against a live account before being relied on:
+   * discriminator(8), virtualTokenReserves, virtualQuoteReserves,
+   * realTokenReserves, realQuoteReserves, tokenTotalSupply, then a complete
+   * flag. A graduated curve reads zero reserves, which this rejects.
+   */
+  const curve = (acc: { data: [string, string] } | null) => {
+    if (!acc) return null;
+    const d = Buffer.from(acc.data[0], "base64");
+    if (d.length < 49 || d[48] === 1) return null;   // absent, short, or complete
+    const virtualToken = d.readBigUInt64LE(8);
+    const virtualQuote = d.readBigUInt64LE(16);
+    const supply = d.readBigUInt64LE(40);
+    return virtualToken > 0n ? (supply * virtualQuote) / virtualToken : null;
+  };
+
   plan.forEach((p, i) => {
-    const base = balance(accounts[i * 2]);
-    const quote = balance(accounts[i * 2 + 1]);
-    out.set(p.mint, {
-      marketCapLamports: base && base > 0n && quote !== null ? (p.supply * quote) / base : null,
-    });
+    const base = balance(accounts[i * 3]);
+    const quote = balance(accounts[i * 3 + 1]);
+    // The pool is authoritative once it exists; before that, the curve is.
+    const fromPool = base && base > 0n && quote !== null ? (p.supply * quote) / base : null;
+    out.set(p.mint, { marketCapLamports: fromPool ?? curve(accounts[i * 3 + 2]) });
   });
   return out;
 }
