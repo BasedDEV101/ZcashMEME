@@ -346,6 +346,18 @@ export async function readCurves(
 export interface MintInfo { decimals: number; supply: string; owner: string; extensions?: unknown }
 
 /**
+ * A mint account's supply and decimals, from its raw bytes.
+ *
+ * Every mint, SPL Token and Token-2022 alike, starts with the same 82-byte
+ * layout: a 36-byte authority field, then supply as a u64, then decimals.
+ * Token-2022's extensions live past byte 82 and do not move these.
+ */
+function decodeMint(data: Buffer): { decimals: number; supply: string } | null {
+  if (data.length < 45) return null;
+  return { supply: data.readBigUInt64LE(36).toString(), decimals: data[44] };
+}
+
+/**
  * Read many mints at once.
  *
  * One getAccountInfo per coin cost 57 calls on a 57-coin pad and exhausted
@@ -355,14 +367,18 @@ export interface MintInfo { decimals: number; supply: string; owner: string; ext
  */
 export async function readMints(r: SolanaRpc, mints: string[]): Promise<Map<string, MintInfo>> {
   const out = new Map<string, MintInfo>();
-  for (let i = 0; i < mints.length; i += 100) {
-    const slice = mints.slice(i, i + 100);
-    const res = await r.call<{ value: ({ owner: string; data: unknown } | null)[] }>(
-      "getMultipleAccounts", [slice, { encoding: "jsonParsed", commitment: "finalized" }]);
+  // base64, not jsonParsed: a parsed mint is an object per account, and 68 of
+  // them made a response large enough that every endpoint refused it, which
+  // left the whole page without supplies or market caps. The raw account is
+  // 82 bytes and says the same thing.
+  for (let i = 0; i < mints.length; i += 50) {
+    const slice = mints.slice(i, i + 50);
+    const res = await r.call<{ value: ({ owner: string; data: [string, string] } | null)[] }>(
+      "getMultipleAccounts", [slice, { encoding: "base64", commitment: "finalized" }]);
     res.value.forEach((acc, j) => {
-      const parsed = (acc?.data as { parsed?: { type?: string; info?: MintInfo } } | undefined)?.parsed;
-      if (!acc || parsed?.type !== "mint" || typeof parsed.info?.decimals !== "number") return;
-      out.set(slice[j], { ...parsed.info, owner: acc.owner });
+      if (!acc) return;
+      const mint = decodeMint(Buffer.from(acc.data[0], "base64"));
+      if (mint) out.set(slice[j], { ...mint, owner: acc.owner });
     });
   }
   return out;

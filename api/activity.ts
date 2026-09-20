@@ -173,11 +173,13 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // RPC here used to fail the whole request -- and with it the launches
     // already discovered above, which needed no mint data at all. It now
     // degrades: the coins still list, without their burns or market caps.
+    let mintsRead = true;
     let mintInfo = new Map<string, Awaited<ReturnType<typeof readMints>> extends Map<string, infer V> ? V : never>();
     try {
       mintInfo = await readMints(r, [...collections.keys()]);
     } catch {
       partial = true;
+      mintsRead = false;
     }
 
     let fetched = 0;
@@ -321,9 +323,13 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       partial,
       stale: false,
     };
-    // Only a complete rebuild is worth keeping: saving a partial one would let
-    // a throttled minute overwrite a good answer with a worse one.
-    if (!partial && ranked.length > 0) await saveSnapshot(body);
+    // Worth keeping if it is substantially right. Requiring a flawless
+    // rebuild meant that on a 66-coin pad, where some single mint scan almost
+    // always gets throttled, the snapshot stopped being written at all -- so
+    // the fallback everyone depends on would have aged indefinitely. A run
+    // that read the mints and found the collections is good enough to stand
+    // in later; one that did not is not.
+    if (mintsRead && ranked.length > 0) await saveSnapshot(body);
     return json(res, 200, body, 120);
   } catch (e) {
     // Ask for the snapshot again rather than trusting the copy read at the
