@@ -79,7 +79,8 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
   // another one and they saturated the RPC between them -- the page then
   // showed "could not read Solana" while the data it needed was sitting in
   // the snapshot. Rebuild frequency is now bounded by time, not by traffic.
-  const cached = await loadSnapshot();
+  const snapshot = await loadSnapshot();
+  const cached = snapshot.data;
   const computedAt = typeof cached?.computedAt === "string" ? Date.parse(cached.computedAt) : 0;
   if (cached && Date.now() - computedAt < FRESH_MS) {
     return json(res, 200, cached, 120);
@@ -402,14 +403,16 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // data loss and blocks every save from then on.
     const previous = (Array.isArray(cached?.collections) ? (cached.collections as Collection[]) : [])
       .filter((c) => c?.mint && eligible(c)).length;
-    if (mintsRead && ranked.length >= previous && ranked.length > 0) await saveSnapshot(body);
+    if (snapshot.readable && mintsRead && ranked.length >= previous && ranked.length > 0) {
+      await saveSnapshot(body);
+    }
     return json(res, 200, body, 120);
   } catch (e) {
     // Ask for the snapshot again rather than trusting the copy read at the
     // start: that read can itself have failed, and answering 502 while a
     // perfectly good previous answer sits in storage is the one outcome
     // worth going out of the way to avoid.
-    const last = cached ?? (await loadSnapshot());
+    const last = cached ?? (await loadSnapshot()).data;
     if (last) return json(res, 200, { ...last, stale: true }, 60);
     return json(res, 502, { error: (e as Error).message, collections: [], burns: [] });
   }

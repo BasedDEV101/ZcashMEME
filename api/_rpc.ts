@@ -197,17 +197,27 @@ export async function saveSnapshot(body: unknown): Promise<void> {
   });
 }
 
-export async function loadSnapshot(): Promise<Record<string, unknown> | null> {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+/**
+ * The stored snapshot, and whether we were able to look.
+ *
+ * The distinction matters: "there is no snapshot" and "the snapshot could not
+ * be read" look the same to a caller that only gets null, and treating a
+ * failed read as an empty one let a rebuild that found five coins save itself
+ * over one holding fifty-eight. A reading we could not compare against is a
+ * reading we must not overwrite.
+ */
+export async function loadSnapshot(): Promise<{ readable: boolean; data: Record<string, unknown> | null }> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return { readable: false, data: null };
   try {
     const { list } = await import("@vercel/blob");
     const found = await list({ prefix: SNAPSHOT, limit: 1 });
     const blob = found.blobs[0];
-    if (!blob) return null;
+    if (!blob) return { readable: true, data: null };   // definitely absent
     const res = await fetch(blob.url, { signal: AbortSignal.timeout(5000) });
-    return res.ok ? ((await res.json()) as Record<string, unknown>) : null;
+    if (!res.ok) return { readable: false, data: null };
+    return { readable: true, data: (await res.json()) as Record<string, unknown> };
   } catch {
-    return null;
+    return { readable: false, data: null };
   }
 }
 
