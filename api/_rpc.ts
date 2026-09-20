@@ -184,54 +184,76 @@ export async function loadSnapshot(): Promise<Record<string, unknown> | null> {
   }
 }
 
-const PUMP_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
-
 export interface CurveState {
-  /** Market cap in lamports, or null once the coin has graduated: the curve's
-      reserves stop moving then and would price it at whatever it left at. */
+  /** Market cap in lamports, or null when there is no honest number to give:
+      a graduated coin's curve stops moving, and a coin quoted in something
+      other than SOL is not priced in lamports at all. */
   marketCapLamports: bigint | null;
   graduated: boolean;
 }
 
+/** Quote mints whose curve reserves are denominated in lamports. */
+const SOL_QUOTES = new Set([
+  "11111111111111111111111111111111",
+  "So11111111111111111111111111111111111111112",
+]);
+
 /**
- * Each coin's bonding curve, in one RPC call for all of them.
+ * Each coin's bonding curve, in as few RPC calls as possible.
  *
- * A pump.fun curve prices its token by its virtual reserves, so market cap is
- * total supply times solReserves/tokenReserves — no price feed, no oracle, and
- * no third-party API that can rate-limit the page. getMultipleAccounts fetches
- * every curve at once, which matters because this runs for every coin on the
- * pad on each rebuild.
+ * Decoded by the pump SDK rather than by reading byte offsets here. Curves
+ * come in several lengths and `create_v2` puts them at a different address
+ * than the original `bonding-curve` PDA -- hand-rolled offsets read the wrong
+ * PDA and returned zeroed reserves for every coin on the pad, which showed as
+ * a blank market cap everywhere. Both addresses are queried and whichever
+ * exists is used.
  */
 export async function readCurves(r: SolanaRpc, mints: string[]): Promise<Map<string, CurveState>> {
   const out = new Map<string, CurveState>();
   if (mints.length === 0) return out;
-  const { PublicKey } = await import("@solana/web3.js");
-  const program = new PublicKey(PUMP_PROGRAM);
-  const pdas = mints.map((m) =>
-    PublicKey.findProgramAddressSync([Buffer.from("bonding-curve"), new PublicKey(m).toBuffer()], program)[0].toBase58());
 
-  // getMultipleAccounts caps at 100 addresses per call.
-  for (let i = 0; i < pdas.length; i += 100) {
-    const slice = pdas.slice(i, i + 100);
-    const res = await r.call<{ value: ({ data: [string, string] } | null)[] }>(
-      "getMultipleAccounts", [slice, { encoding: "base64", commitment: "finalized" }]);
-    res.value.forEach((acc, j) => {
-      const mint = mints[i + j];
-      if (!acc) return;
-      const d = Buffer.from(acc.data[0], "base64");
-      // discriminator(8) | virtualTokenReserves | virtualSolReserves |
-      // realTokenReserves | realSolReserves | tokenTotalSupply | complete
-      if (d.length < 49) return;
-      const virtualToken = d.readBigUInt64LE(8);
-      const virtualSol = d.readBigUInt64LE(16);
-      const totalSupply = d.readBigUInt64LE(40);
-      const graduated = d[48] === 1;
-      if (graduated || virtualToken === 0n) {
-        out.set(mint, { marketCapLamports: null, graduated });
-        return;
-      }
-      out.set(mint, { marketCapLamports: (totalSupply * virtualSol) / virtualToken, graduated: false });
-    });
+  const { PumpSdk, bondingCurvePda, bondingCurveV2Pda, bondingCurveMarketCap } =
+    await import("@pump-fun/pump-sdk");
+  const { PublicKey } = await import("@solana/web3.js");
+  const sdk = new PumpSdk();
+
+  // Two candidate addresses per mint, queried together.
+  const addresses: string[] = [];
+  for (const m of mints) {
+    addresses.push(bondingCurveV2Pda(m).toBase58(), bondingCurvePda(m).toBase58());
   }
+
+  const accounts: ({ data: [string, string]; owner: string } | null)[] = [];
+  for (let i = 0; i < addresses.length; i += 100) {
+    const res = await r.call<{ value: ({ data: [string, string]; owner: string } | null)[] }>(
+      "getMultipleAccounts", [addresses.slice(i, i + 100), { encoding: "base64", commitment: "finalized" }]);
+    accounts.push(...res.value);
+  }
+
+  mints.forEach((mint, i) => {
+    const account = accounts[i * 2] ?? accounts[i * 2 + 1];
+    if (!account) return;
+    try {
+      const curve = sdk.decodeBondingCurve({
+        data: Buffer.from(account.data[0], "base64"),
+        owner: new PublicKey(account.owner),
+        lamports: 0,
+        executable: false,
+      } as never);
+      if (curve.complete) { out.set(mint, { marketCapLamports: null, graduated: true }); return; }
+      if (!SOL_QUOTES.has(curve.quoteMint.toBase58())) { out.set(mint, { marketCapLamports: null, graduated: false }); return; }
+      // The curve's own fields are already BN, so they go straight in: no
+      // second BN implementation to disagree about big numbers.
+      const cap = bondingCurveMarketCap({
+        mintSupply: curve.tokenTotalSupply,
+        virtualQuoteReserves: curve.virtualQuoteReserves,
+        virtualTokenReserves: curve.virtualTokenReserves,
+      });
+      out.set(mint, { marketCapLamports: BigInt(cap.toString()), graduated: false });
+    } catch {
+      // An undecodable curve is left without a market cap rather than given a
+      // made-up one.
+    }
+  });
   return out;
 }

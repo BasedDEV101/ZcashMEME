@@ -110,6 +110,10 @@ function Page() {
                   its collection. You cannot end up with a coin and no collection, or a paid fee and no
                   coin.
                 </Warning>
+                <Warning title={`The fee is ${LAUNCH_FEE_SOL} SOL, and it is not the point`}>
+                  It is there so that filling the register with junk costs something. The pad earns from
+                  the creator fees below, not from charging you to launch.
+                </Warning>
                 <Warning title="The pad is the creator, and keeps the creator fees">
                   Your coin is created under this pad's wallet, so pump.fun's creator fee on every trade
                   goes to it, not to you. That is what pays to inscribe your holders' stamps. You still

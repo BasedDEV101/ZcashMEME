@@ -16,8 +16,14 @@
 /** What one stamp costs to inscribe, in zatoshi. Matches STAMP_COST_ZEC. */
 export const STAMP_COST_ZAT = 30_546n;
 
-/** Stamps one paid launch buys. The rest is the launcher's to fund. */
-export const ALLOWANCE_STAMPS = 2_000n;
+/** Stamps one paid launch buys. The rest is the launcher's to fund.
+ *
+ * Sized against the 0.1 SOL launch fee rather than against generosity: the
+ * page promises this number, so it has to be one the fee covers even when ZEC
+ * moves against SOL. The pad's other income is pump.fun's creator fees, which
+ * arrive over a coin's life rather than up front, so they are not counted on
+ * here. */
+export const ALLOWANCE_STAMPS = 500n;
 export const ALLOWANCE_ZAT = ALLOWANCE_STAMPS * STAMP_COST_ZAT;
 
 /** Top up when a collection is down to this many stamps of balance. */
