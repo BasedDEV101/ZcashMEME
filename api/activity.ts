@@ -95,6 +95,10 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     const collections = new Map<string, Collection>();
     const uris = new Map<string, string>();
     const knownSignatures = new Set<string>();
+    // A launch that could not be read this pass is simply not added this
+    // pass; the ones already seeded are untouched, so the list only ever
+    // grows and the next rebuild picks up what this one missed.
+    let partial = false;
     for (const prior of (Array.isArray(cached?.collections) ? cached.collections : []) as Collection[]) {
       if (!prior?.mint) continue;
       collections.set(prior.mint, {
@@ -113,11 +117,25 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       supplyRaw: null, tokenProgramId: null,
     });
 
+    // Listing can fail part way and that is survivable: the collections are
+    // already seeded, so a short list only delays a new coin. It is not worth
+    // a 502.
+    //
+    // One failure mode is specific to having several endpoints: pagination
+    // carries a `before` cursor, and when a call fails over to another
+    // provider that provider may never have heard of that signature --
+    // "Transaction ... not found" -- which used to take down the whole page.
     const sigs = [];
     for (const address of FEE_ADDRESSES) {
       let before: string | undefined;
       for (let page = 0; page < FEE_PAGES; page++) {
-        const batch = await r.getSignaturesForAddress(address, { before, limit: 1000 });
+        let batch;
+        try {
+          batch = await r.getSignaturesForAddress(address, { before, limit: 1000 });
+        } catch {
+          partial = true;
+          break;
+        }
         sigs.push(...batch);
         if (batch.length < 1000) break;
         before = batch[batch.length - 1].signature;
@@ -132,10 +150,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // Only launches we have never read. Everything else is already seeded.
     const unseen = paid.filter((s) => !knownSignatures.has(s.signature));
     const launchTxs = new Map<string, RpcTransaction>();
-    // A launch that could not be read this pass is simply not added this
-    // pass; the ones already seeded are untouched, so the list only ever
-    // grows and the next rebuild picks up what this one missed.
-    let partial = false;
+
     await inParallel(unseen, WIDTH, async (s) => {
       try {
         const raw = await r.getTransaction(s.signature, "finalized");
