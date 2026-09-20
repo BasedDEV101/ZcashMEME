@@ -81,6 +81,8 @@ function Page() {
           </div>
         </section>
 
+        <WhyAStamp />
+
         <Proof />
 
         <footer className="flex flex-wrap items-baseline justify-between gap-4 px-2 py-8 text-sm text-ink-soft">
@@ -128,6 +130,50 @@ function Warning({ title, children }: { title: string; children: React.ReactNode
     <div>
       <h4 className="font-body text-[0.95rem] font-semibold text-ink">{title}</h4>
       <p className="mt-1 text-[0.9rem] leading-relaxed text-ink-soft">{children}</p>
+    </div>
+  );
+}
+
+function WhyAStamp() {
+  return (
+    <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
+      <h2 className="font-display text-[1.7rem] leading-none text-engrave">Why a stamp, and not a token</h2>
+      <div className="mt-5 text-engrave">
+        <GuillocheBand className="h-5 w-full" />
+      </div>
+
+      <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-2">
+        <Clause title="Zcash cannot hold assets yet">
+          Shielded assets are specified — ZIP 226 and ZIP 227 — but they are drafts. They are not on
+          mainnet, and the next network upgrade does not include the transaction format they need.
+        </Clause>
+        <Clause title="Zcash can hold inscriptions today">
+          An inscription needs no new consensus rules. It is an ordinary transparent transaction carrying
+          data, which Zcash has accepted since the beginning. Around 113,000 already exist on mainnet.
+        </Clause>
+        <Clause title="So the stamp is the asset, in the only form Zcash accepts today">
+          Not a placeholder image. A record of one specific destruction, written to the chain the asset
+          will eventually live on.
+        </Clause>
+        <Clause title="Uniqueness is doing real work">
+          Each stamp maps to exactly one burn and can be claimed once. A balance cannot say that this
+          destruction happened, on this date, for this amount, to this person. Only a unique record can.
+        </Clause>
+      </div>
+
+      <p className="mt-10 max-w-[64ch] border-t border-engrave/25 pt-6 font-display text-[1.2rem] leading-snug text-ink sm:text-[1.4rem]">
+        When shielded assets activate, each stamp converts to the amount cut into it. The stamp is the
+        claim that survives until then.
+      </p>
+    </section>
+  );
+}
+
+function Clause({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="font-display text-[1.15rem] leading-snug text-ink">{title}</h3>
+      <p className="mt-2 max-w-[58ch] text-[0.92rem] leading-relaxed text-ink-soft">{children}</p>
     </div>
   );
 }
