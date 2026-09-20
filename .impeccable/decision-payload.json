@@ -1,0 +1,80 @@
+{
+  "title": "Choose the visual world",
+  "question": "The roll assigned Fire Insurance Mark. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Fire Insurance Mark",
+      "kicker": "THE ROLL",
+      "lineage": "cast plaques nailed to buildings that proved you paid before the fire",
+      "thesis": "Your burn is a numbered mark, fixed permanently to a wall that is not ours. The category ships a dark gradient with a glowing coin; this ships a heavy object with a serial number cast into it.",
+      "palette": ["#1c1a17", "#9c3b1f", "#e8e2d4", "#b08d3f", "#6b6f73"],
+      "materials": ["cast lead", "chipped enamel", "relief numerals", "bitumen ground"],
+      "viewport": "One oversized mark centred on a near-black field, its relief numerals showing the amount burned, the serial reading as the NFT number. Burn sits directly beneath it as the only bright element. The wall behind is dark and unglamorous; the mark is the whole first screen.",
+      "risk": "Insurance is a dull word. If the marks render flat rather than cast, it reads as a logo on a background instead of an object with weight.",
+      "raised": [
+        { "from": "challenger-canopy", "raise": "Colour now owns whole regions rather than accenting a neutral ground: the enamel field is the page, not a highlight on it." }
+      ],
+      "board": "https://impeccable.style/worlds/cards/generative-art-computational-color-chord-counterpoint.webp"
+    },
+    {
+      "id": "model-pick",
+      "label": "Certificate of Destruction",
+      "kicker": "IMPECCABLE'S PICK",
+      "lineage": "central-bank note cancellation records and industrial destruction certificates",
+      "thesis": "The NFT is the receipt for something provably destroyed: guilloche, serial, CANCELLED struck through the face.",
+      "palette": ["#f2ede1", "#1b3a2f", "#d8455f", "#2a2724"],
+      "materials": ["safety paper", "engraved guilloche", "rubber stamp", "perforation"],
+      "viewport": "A single certificate filling the screen, amount burned set in engraved numerals, CANCELLED struck across it at an angle, the burn action sitting where a signature line would be.",
+      "risk": "It is also where most runs in this category land once they think past the neon: document-as-interface is the literate default, and it can read as a skeuomorphic novelty rather than a product."
+    },
+    {
+      "id": "challenger-kiln",
+      "label": "Kiln Shelf",
+      "verdict": "competitive",
+      "lineage": "glaze test tiles fired on a kiln shelf",
+      "thesis": "Fire as the thing that transforms and then freezes: a shelf of numbered samples, each with its recipe card.",
+      "palette": ["#f4f1ea", "#1b3f8f", "#0d1b3e", "#8fa6c9"],
+      "materials": ["chalk kiln shelf", "cobalt glaze run", "fused sapphire pool"],
+      "viewport": "A shelf row of fired samples, each stamped with the amount burned, gravity setting the reading order.",
+      "case": "Holds product clarity outright: apply/fire/flow/arrest maps exactly onto queued/burning/inscribing/confirmed, and a shelf of numbered samples IS a collection of NFTs stamped with amounts. Loses on audience: a Solana trader has no relationship with a kiln.",
+      "risk": "Reads as craft-studio branding, which flatters the Zcash audience and loses the traders."
+    },
+    {
+      "id": "challenger-movida",
+      "label": "Movida Scene Magazine",
+      "verdict": "competitive",
+      "lineage": "post-dictatorship Madrid scene covers, hand-inked and misregistered",
+      "thesis": "Loud, cheap, irreverent print: fluorescent inks, a hard-cropped face, cover lines thrown at angles.",
+      "palette": ["#ff2d95", "#ccff00", "#000000", "#ffffff"],
+      "materials": ["fluorescent ink", "misregistered cheap print", "hand-inked masthead"],
+      "viewport": "A cover-like first screen, the ticker hand-inked as masthead, burn totals thrown across it as cover lines.",
+      "case": "Wins audience identification outright: this is the register memecoin culture already speaks, and it would travel on X better than anything else on the table. Loses product clarity: a deliberate scatter is the wrong form for an irreversible action that must be read carefully before signing.",
+      "risk": "Energy at the cost of comprehension, on a screen where a misread costs the user real money."
+    },
+    {
+      "id": "challenger-canopy",
+      "label": "Silk Colour Chords",
+      "verdict": "declined",
+      "lineage": "tensioned translucent banners crossing a sunlit courtyard",
+      "thesis": "Overlapping translucent colour fields computing chords as they cross.",
+      "palette": ["#2b3a8f", "#b3341f", "#e8a72c", "#fdfcf7"],
+      "materials": ["translucent silk", "sun-white paving"],
+      "case": "Declined on both axes: traders have no relationship with it, and overlapping colour chords carry no meaning a burn record needs. Its total colour commitment was taken into the assigned direction rather than discarded.",
+      "risk": "Beautiful and mute."
+    }
+  ],
+  "canonCard": {
+    "id": "canon",
+    "label": "The Crypto Standard",
+    "kicker": "PLAYED STRAIGHT",
+    "lineage": "what every token site ships",
+    "thesis": "Near-black ground, one neon accent, glass cards, a 3D coin, Connect Wallet top right.",
+    "palette": ["#0a0a0f", "#7b5cff", "#14f195", "#e6e6f0"],
+    "materials": ["glassmorphism", "gradient glow", "3D render"],
+    "viewport": "Hero headline, gradient orb, wallet button, three feature cards below.",
+    "risk": "Invisible among a thousand identical pages, and the Zcash audience reads it as a wrapper."
+  },
+  "reroll": { "enabled": true, "steer": true, "registers": ["plain", "safer", "bolder"] },
+  "buildPath": { "value": "code" }
+}
