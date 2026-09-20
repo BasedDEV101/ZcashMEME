@@ -28,6 +28,14 @@ export interface SignatureInfo {
   memo?: string | null;
 }
 
+/**
+ * api.mainnet-beta.solana.com is not usable for this workload: it 403s
+ * browsers outright and rate-limits servers hard enough that paging a traded
+ * token's history never finishes. solana-rpc.publicnode.com served 5,000
+ * signatures in 2s where the public endpoint gave up after 3 attempts.
+ */
+export const DEFAULT_RPC = "https://solana-rpc.publicnode.com";
+
 export class SolanaRpc {
   url: string;
   maxRetries: number;

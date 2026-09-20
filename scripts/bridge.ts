@@ -1,5 +1,6 @@
 // Run the whole bridge: watch for burns, mint the NFTs, rebuild the ledger.
 //   BRIDGE_CONFIG=config/devnet.json node scripts/bridge.ts [--once]
+import { solanaRpcUrl } from "../src/env.ts";
 import { readFileSync } from "node:fs";
 import { Store } from "../src/store/db.ts";
 import { SolanaRpc, readMint } from "../src/solana/rpc.ts";
@@ -19,7 +20,7 @@ const cfg: BridgeConfig = {
   minBurnRaw: BigInt(raw.minBurnRaw), startSlot: Number(raw.startSlot ?? 0),
   zcashNetwork: raw.zcashNetwork, protocol: raw.protocol,
 };
-const rpc = new SolanaRpc(raw.rpc);
+const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? solanaRpcUrl());
 const onChain = await readMint(rpc, cfg.solanaMint);
 if (onChain.tokenProgramId !== cfg.tokenProgramId || onChain.decimals !== cfg.decimals) {
   throw new Error("config disagrees with the chain about the token program or decimals");

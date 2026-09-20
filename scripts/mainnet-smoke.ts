@@ -8,6 +8,7 @@
 //
 // Refuses to spend more than a hard ceiling. Run with --yes to proceed.
 
+import { solanaRpcUrl } from "../src/env.ts";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, setAuthority, AuthorityType, TOKEN_2022_PROGRAM_ID, createBurnCheckedInstruction } from "@solana/spl-token";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -28,7 +29,7 @@ if (!process.argv.includes("--yes")) {
 }
 const go = process.argv.includes("--yes");
 
-const conn = new Connection(process.env.SOLANA_MAINNET_RPC ?? "https://api.mainnet-beta.solana.com", "confirmed");
+const conn = new Connection(solanaRpcUrl(), "confirmed");
 const { keypair: payer } = loadOrCreateKeypair("keys/solana-mainnet.json");
 const { key: zkey } = loadOrCreateKey("keys/zcash-mainnet.hex");
 const zaddr = zkey.address("main");

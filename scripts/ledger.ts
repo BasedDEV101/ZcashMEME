@@ -1,4 +1,5 @@
 // Rebuild and print the NFT ledger from chain data (SPEC §4).
+import { solanaRpcUrl } from "../src/env.ts";
 import { readFileSync } from "node:fs";
 import { Store } from "../src/store/db.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
@@ -19,7 +20,7 @@ const lwd = new Lightwalletd(process.env.LIGHTWALLETD ?? (cfg.zcashNetwork === "
 
 // A burn an inscription cites but the watcher never listed (history pruned,
 // or a different RPC) is fetched directly rather than assumed non-existent.
-const rpc = new SolanaRpc(raw.rpc);
+const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? solanaRpcUrl());
 const resolve = async (signature: string) => {
   const tx = await rpc.getTransaction(signature, "finalized");
   if (!tx) throw new Error("not found by this RPC");

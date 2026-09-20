@@ -4,7 +4,7 @@ import { SolanaRpc, readMint } from "../src/solana/rpc.ts";
 import { normalizeTransaction } from "../src/solana/normalize.ts";
 import { MEMO_V3 } from "../src/solana/programs.ts";
 
-const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com");
+const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? "https://solana-rpc.publicnode.com");
 const usdc = await readMint(rpc, "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 console.log("readMint(USDC):", { ...usdc, supply: usdc.supply.toString() });
 

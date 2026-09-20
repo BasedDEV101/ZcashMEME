@@ -8,6 +8,7 @@
 // and refundTo points back at our own Solana wallet so a failed swap returns
 // the funds rather than stranding them.
 
+import { solanaRpcUrl } from "../src/env.ts";
 import { Connection, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { loadOrCreateKeypair } from "../src/solana/wallet.ts";
 import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
@@ -18,7 +19,7 @@ const SOL_TO_SWAP = Number(process.env.SWAP_SOL ?? 0.05);
 const go = process.argv.includes("--yes");
 if (SOL_TO_SWAP > MAX_SOL) throw new Error(`refusing to swap ${SOL_TO_SWAP} SOL, ceiling is ${MAX_SOL}`);
 
-const conn = new Connection(process.env.SOLANA_MAINNET_RPC ?? "https://api.mainnet-beta.solana.com", "confirmed");
+const conn = new Connection(solanaRpcUrl(), "confirmed");
 const { keypair: payer } = loadOrCreateKeypair("keys/solana-mainnet.json");
 const { key: zkey } = loadOrCreateKey("keys/zcash-mainnet.hex");
 const zaddr = zkey.address("main");

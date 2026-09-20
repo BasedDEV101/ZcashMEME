@@ -1,6 +1,6 @@
 {
   "network": "mainnet",
-  "rpc": "https://api.mainnet-beta.solana.com",
+  "rpc": "https://solana-rpc.publicnode.com",
   "solanaMint": "EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc",
   "tokenProgramId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
   "decimals": 6,

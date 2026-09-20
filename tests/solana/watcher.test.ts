@@ -124,3 +124,16 @@ test("the slot cursor stops a re-scan from re-fetching old transactions", async 
   await pass();
   assert.equal(rpc.calls.get - gets, 1, "only the one new tx is fetched, not all six again");
 });
+
+test("a first pass does not walk a million signatures", async () => {
+  // A traded mint has more history than any pass should read. The first pass
+  // takes the newest window; older burns are reached by resolving the burn an
+  // inscription cites, not by scanning.
+  const { rpc, store, add, pass } = setup();
+  for (let i = 0; i < 40; i++) add(make("transfer"));
+  add(make("burn"));
+  const r = await watchPass(rpc as unknown as SolanaRpc, store, CFG, { pageSize: 10, maxInitialPages: 2 });
+  assert.equal(rpc.calls.list, 2, "stopped at the page cap");
+  assert.ok(r.scanned <= 20);
+  assert.ok(store.getCursor(`solana:${MINT}`), "cursor still advances so the next pass is incremental");
+});

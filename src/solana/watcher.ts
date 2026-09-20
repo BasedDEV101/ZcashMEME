@@ -34,7 +34,7 @@ type Log = (msg: string) => void;
 
 export async function watchPass(
   rpc: SolanaRpc, store: Store, cfg: BridgeConfig,
-  opts: { pageSize?: number; log?: Log } = {},
+  opts: { pageSize?: number; log?: Log; maxInitialPages?: number } = {},
 ): Promise<PassResult> {
   const cursorName = `solana:${cfg.solanaMint}`;
   const slotName = `${cursorName}:slot`;
@@ -42,6 +42,12 @@ export async function watchPass(
   const lastSlot = Number(store.getCursor(slotName) ?? "0");
   const pageSize = opts.pageSize ?? 1000;
   const log = opts.log ?? (() => {});
+  // A traded mint accumulates millions of signatures -- 1.28M for $STAMP one
+  // day after launch, 250s to list even on a paid endpoint, growing hourly.
+  // A first pass therefore reads only the newest window and records its
+  // cursor there. Anything older is reached the cheap way: an inscription
+  // citing an old burn resolves it with a single getTransaction (SPEC 4.2.1).
+  const maxInitialPages = opts.maxInitialPages ?? 20;
 
   // 1. collect everything newer than the cursor (newest first).
   //
@@ -53,6 +59,8 @@ export async function watchPass(
   const fresh: SignatureInfo[] = [];
   let before: string | undefined;
   let useUntil = until;
+  let pages = 0;
+  let cappedAt: string | undefined;
   for (;;) {
     let page: SignatureInfo[];
     try {
@@ -70,11 +78,17 @@ export async function watchPass(
     // Always stop at the collection's start slot, not only in the fallback
     // path: a traded token accumulates tens of thousands of signatures, and
     // paging to genesis on every fresh store makes the first pass unusable.
+    pages++;
     const floor = Math.max(useUntil ? 0 : lastSlot, cfg.startSlot - 1);
     const stop = page.findIndex((s) => s.slot <= floor);
     fresh.push(...(stop >= 0 ? page.slice(0, stop) : page));
     if (stop >= 0 || page.length < pageSize) break;
     before = page[page.length - 1].signature;
+    if (!until && pages >= maxInitialPages) {
+      cappedAt = before;
+      log(`first pass stopped after ${pages * pageSize} signatures; older burns resolve on demand`);
+      break;
+    }
   }
   const result: PassResult = { scanned: fresh.length, fetched: 0, burnAttempts: 0, valid: 0, rejected: 0, cursor: until ?? null };
   if (fresh.length === 0) return result;

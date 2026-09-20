@@ -5,6 +5,7 @@
 // Reads decimals and the token program from chain rather than trusting flags.
 // Costs one inscription (~$0.5) from the operator wallet.
 
+import { solanaRpcUrl } from "../src/env.ts";
 import { readFileSync } from "node:fs";
 import { SolanaRpc, readMint } from "../src/solana/rpc.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
@@ -27,7 +28,7 @@ const mint = args.get("mint");
 const symbol = args.get("symbol");
 if (!mint || !symbol) throw new Error("usage: --mint <solana mint> --symbol <TICKER> [--min <whole tokens>]");
 
-const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com");
+const rpc = new SolanaRpc(solanaRpcUrl());
 const onChain = await readMint(rpc, mint);
 const minWhole = BigInt(args.get("min") ?? "1000000");
 

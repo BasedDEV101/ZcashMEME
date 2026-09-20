@@ -1,5 +1,6 @@
 // Run the burn watcher against a configured network.
 //   node scripts/watch.ts [--once] [--interval 15]
+import { solanaRpcUrl } from "../src/env.ts";
 import { readFileSync } from "node:fs";
 import { SolanaRpc, readMint } from "../src/solana/rpc.ts";
 import { Store } from "../src/store/db.ts";
@@ -18,7 +19,7 @@ const cfg: BridgeConfig = {
   zcashNetwork: raw.zcashNetwork,
   protocol: raw.protocol,
 };
-const rpc = new SolanaRpc(raw.rpc);
+const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? solanaRpcUrl());
 
 // Config must agree with the chain, or the rule would judge by the wrong program.
 const onChain = await readMint(rpc, cfg.solanaMint);

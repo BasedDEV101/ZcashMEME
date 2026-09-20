@@ -6,6 +6,7 @@
 // mint for burns and inscribes stamps paid from THAT collection's own funding
 // address. A collection with an empty balance stalls only itself.
 
+import { solanaRpcUrl } from "../src/env.ts";
 import { SolanaRpc, readMint } from "../src/solana/rpc.ts";
 import { Store } from "../src/store/db.ts";
 import { watchPass } from "../src/solana/watcher.ts";
@@ -20,7 +21,7 @@ import type { BridgeConfig } from "../src/core/types.ts";
 const once = process.argv.includes("--once");
 const network = (process.env.ZCASH_NETWORK ?? "main") as "main" | "test";
 const protocol = process.env.PROTOCOL ?? "zsam";
-const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com");
+const rpc = new SolanaRpc(solanaRpcUrl());
 const lwd = new Lightwalletd(network === "main" ? "zec.rocks:443" : "testnet.zec.rocks:443");
 const { key: master } = loadOrCreateKey(process.env.ZCASH_KEY ?? `keys/zcash-${network}net.hex`);
 const interval = Number(process.env.LAUNCHPAD_INTERVAL ?? 45) * 1000;
