@@ -4,7 +4,7 @@ import { Certificate } from "./components/Certificate.tsx";
 import { BurnPanel } from "./components/BurnPanel.tsx";
 import { Guilloche, GuillocheBand } from "./components/Guilloche.tsx";
 import { CONFIG, PROOF, formatTokens } from "./lib/config.ts";
-import { LaunchPanel } from "./components/LaunchPanel.tsx";
+import { CreateCoinPanel } from "./components/CreateCoinPanel.tsx";
 import { Registry } from "./components/Registry.tsx";
 import { LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
 
@@ -52,23 +52,28 @@ function Page() {
           <Nav route={route} go={go} />
           <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
             <h1 className="font-display text-[1.9rem] leading-none text-engrave sm:text-[2.4rem]">
-              Register a collection
+              Launch a coin
             </h1>
             <div className="mt-5 text-engrave">
               <GuillocheBand className="h-5 w-full" />
             </div>
             <p className="mt-7 max-w-[64ch] text-[0.98rem] leading-relaxed text-ink-soft">
-              Any Solana token can have stamps. Register it here and its holders can burn and receive a
-              certificate on Zcash, cut with the exact amount they destroyed — the same mechanism{" "}
-              {CONFIG.ticker} uses, with no special treatment for ours.
+              Create a coin on pump.fun and its collection is registered on Zcash in the same breath. Its
+              holders can then burn and receive a certificate cut with the exact amount they destroyed —
+              the same mechanism {CONFIG.ticker} uses, with no special treatment for ours.
             </p>
             <div className="mt-8 grid gap-10 lg:grid-cols-[1.15fr_1fr]">
-              <LaunchPanel collections={collections} />
+              <CreateCoinPanel />
               <aside className="space-y-6 border-t border-engrave/20 pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
                 <h3 className="font-display text-xl text-engrave">How it works</h3>
-                <Warning title={`${LAUNCH_FEE_SOL} SOL to register`}>
-                  Pays for your collection's record to be inscribed on Zcash mainnet, permanently. One
-                  mint can only be registered once, and the first registration wins.
+                <Warning title="One signature does everything">
+                  It creates the coin on pump.fun, pays the {LAUNCH_FEE_SOL} SOL launch fee, and registers
+                  its collection. You cannot end up with a coin and no collection, or a paid fee and no
+                  coin.
+                </Warning>
+                <Warning title="Mayhem mode is off">
+                  It would double the supply and let pump's agent burn tokens on its own — burns nobody
+                  authorised, which would issue stamps and wreck your collection's accounting.
                 </Warning>
                 <Warning title="Your collection pays for its own stamps">
                   Each stamp costs about {STAMP_COST_ZEC} ZEC to inscribe, drawn from your collection's
@@ -172,7 +177,7 @@ function Nav({ route, go }: { route: string; go: (p: string) => void }) {
   const here = route.startsWith("/launch") ? "/launch" : "/";
   return (
     <nav className="flex items-baseline gap-6 px-2">
-      {[["/", "Burn"], ["/launch", "Register a collection"]].map(([path, label]) => (
+      {[["/", "Burn"], ["/launch", "Launch a coin"]].map(([path, label]) => (
         <button
           key={path}
           type="button"
