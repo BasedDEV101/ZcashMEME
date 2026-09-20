@@ -18,7 +18,7 @@
 // filter can never drop a valid burn.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { decodeBase58, inParallel, json, lamportsTransferredTo, readOnchainMetadata, readPumpCreate, rpc } from "./_rpc.ts";
+import { decodeBase58, inParallel, json, lamportsTransferredTo, loadSnapshot, readCurves, readOnchainMetadata, readPumpCreate, rpc, saveSnapshot } from "./_rpc.ts";
 import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.ts";
 import { normalizeTransaction, resolveKeys, type RpcTransaction } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
@@ -51,9 +51,31 @@ export interface Collection {
   burnCount: number;      // certificates earned
   refusedCount: number;
   burners: number;        // distinct wallets that burned
+  /** Whole tokens gone from supply, however they went. Always at least
+      burnedTokens, and larger when tokens were burned without a memo — those
+      earn no certificate but they are still destroyed. */
+  destroyedTokens: string | null;
+  /** Market cap in lamports, null once the coin graduates off the curve. */
+  marketCapLamports: string | null;
+  graduated: boolean;
 }
 
+/** How long a rebuild's answer stands before another one is worth doing. */
+const FRESH_MS = 3 * 60 * 1000;
+
 export default async function handler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // Serve the last rebuild if it is recent, without touching an RPC.
+  //
+  // A rebuild takes over a minute, so without this every cache miss started
+  // another one and they saturated the RPC between them -- the page then
+  // showed "could not read Solana" while the data it needed was sitting in
+  // the snapshot. Rebuild frequency is now bounded by time, not by traffic.
+  const cached = await loadSnapshot();
+  const computedAt = typeof cached?.computedAt === "string" ? Date.parse(cached.computedAt) : 0;
+  if (cached && Date.now() - computedAt < FRESH_MS) {
+    return json(res, 200, cached, 120);
+  }
+
   try {
     const r = rpc();
 
@@ -65,6 +87,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       minWholeTokens: FLAGSHIP.minWholeTokens, signature: null, initialSupply: null,
       launchedAt: FLAGSHIP.launchedAt, launchedBy: null, decimals: 6,
       burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
+      destroyedTokens: null, marketCapLamports: null, graduated: false,
     });
 
     const sigs = [];
@@ -127,6 +150,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         initialSupply: minted > 0n ? minted.toString() : null,
         launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
+        destroyedTokens: null, marketCapLamports: null, graduated: false,
       });
     }
 
@@ -164,6 +188,10 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       // Listing a pump.fun mint's signatures is the expensive part of this
       // request -- fourteen of them in sequence took 114 seconds -- and most
       // coins on the pad have never had a single token destroyed.
+      if (c.initialSupply && typeof parsed.info.supply === "string") {
+        const gone = BigInt(c.initialSupply) - BigInt(parsed.info.supply);
+        c.destroyedTokens = (gone > 0n ? gone / 10n ** BigInt(c.decimals) : 0n).toString();
+      }
       if (c.initialSupply && parsed.info.supply === c.initialSupply) return;
       if (!c.name) {
         const meta = await readOnchainMetadata(r, c.mint, parsed.info);
@@ -220,6 +248,20 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     }
     for (const [mint, set] of wallets) collections.get(mint)!.burners = set.size;
 
+    // ---- 3b. market caps, one call for every coin.
+    try {
+      const curves = await readCurves(r, [...collections.keys()]);
+      for (const [mint, state] of curves) {
+        const c = collections.get(mint);
+        if (!c) continue;
+        c.marketCapLamports = state.marketCapLamports?.toString() ?? null;
+        c.graduated = state.graduated;
+      }
+    } catch {
+      // No market caps this time. The leaderboard still ranks by burns, which
+      // is its default and does not need them.
+    }
+
     // ---- 4. images, best effort: a launcher's host being down must not empty
     //         the leaderboard.
     await Promise.all([...collections.values()].map(async (c) => {
@@ -240,14 +282,21 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     });
     const burns = [...rows.values()].sort((a, b) => b.slot - a.slot).slice(0, MAX_BURN_ROWS);
 
-    return json(res, 200, {
+    const body = {
       collections: ranked,
       burns,
       feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
       historyUpdated: (history as { updated: string | null }).updated,
+      computedAt: new Date().toISOString(),
       partial,
-    }, 120);
+      stale: false,
+    };
+    // Only a complete rebuild is worth keeping: saving a partial one would let
+    // a throttled minute overwrite a good answer with a worse one.
+    if (!partial && ranked.length > 0) await saveSnapshot(body);
+    return json(res, 200, body, 120);
   } catch (e) {
+    if (cached) return json(res, 200, { ...cached, stale: true }, 60);
     return json(res, 502, { error: (e as Error).message, collections: [], burns: [] });
   }
 }

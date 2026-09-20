@@ -8,8 +8,8 @@ import { SOLSCAN, short, tokens, when, type ActivityBurn } from "../lib/activity
  * rule is the clearest possible statement of what the rule is, and hiding them
  * would make the feed look like a promise instead of a record.
  */
-export function Burns({ burns, loading, error, limit, onMore }: {
-  burns: ActivityBurn[]; loading: boolean; error: string | null;
+export function Burns({ burns, loading, error, stale, limit, onMore }: {
+  burns: ActivityBurn[]; loading: boolean; error: string | null; stale?: boolean;
   limit?: number; onMore?: () => void;
 }) {
   const shown = limit ? burns.slice(0, limit) : burns;
@@ -102,6 +102,13 @@ export function Burns({ burns, loading, error, limit, onMore }: {
         >
           All {burns.length} burns
         </button>
+      )}
+
+      {stale && (
+        <p className="mt-5 max-w-[66ch] font-data text-xs text-ink-soft">
+          Solana did not answer on the last refresh, so this is the most recent reading rather than a
+          live one. Nothing here is wrong; some of it may be a few minutes behind.
+        </p>
       )}
 
       <p className="mt-6 max-w-[66ch] text-sm text-ink-soft">

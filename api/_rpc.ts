@@ -149,3 +149,89 @@ export async function inParallel<T>(items: T[], width: number, work: (item: T) =
   });
   await Promise.all(runners);
 }
+
+const SNAPSHOT = "activity/latest.json";
+
+/**
+ * The last good answer, kept so a bad minute on an RPC is invisible.
+ *
+ * Rebuilding this page needs dozens of RPC calls, and any one of them can be
+ * rate-limited. Showing "could not read Solana" in that case is the wrong
+ * trade: the data is minutes old at best anyway, so yesterday's answer beats
+ * no answer. Only a successful rebuild overwrites it, so the fallback can go
+ * stale but never wrong.
+ */
+export async function saveSnapshot(body: unknown): Promise<void> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return;
+  const { put } = await import("@vercel/blob");
+  await put(SNAPSHOT, JSON.stringify(body), {
+    access: "public", contentType: "application/json",
+    addRandomSuffix: false, allowOverwrite: true,
+  });
+}
+
+export async function loadSnapshot(): Promise<Record<string, unknown> | null> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+  try {
+    const { list } = await import("@vercel/blob");
+    const found = await list({ prefix: SNAPSHOT, limit: 1 });
+    const blob = found.blobs[0];
+    if (!blob) return null;
+    const res = await fetch(blob.url, { signal: AbortSignal.timeout(5000) });
+    return res.ok ? ((await res.json()) as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+const PUMP_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+
+export interface CurveState {
+  /** Market cap in lamports, or null once the coin has graduated: the curve's
+      reserves stop moving then and would price it at whatever it left at. */
+  marketCapLamports: bigint | null;
+  graduated: boolean;
+}
+
+/**
+ * Each coin's bonding curve, in one RPC call for all of them.
+ *
+ * A pump.fun curve prices its token by its virtual reserves, so market cap is
+ * total supply times solReserves/tokenReserves — no price feed, no oracle, and
+ * no third-party API that can rate-limit the page. getMultipleAccounts fetches
+ * every curve at once, which matters because this runs for every coin on the
+ * pad on each rebuild.
+ */
+export async function readCurves(r: SolanaRpc, mints: string[]): Promise<Map<string, CurveState>> {
+  const out = new Map<string, CurveState>();
+  if (mints.length === 0) return out;
+  const { PublicKey } = await import("@solana/web3.js");
+  const program = new PublicKey(PUMP_PROGRAM);
+  const pdas = mints.map((m) =>
+    PublicKey.findProgramAddressSync([Buffer.from("bonding-curve"), new PublicKey(m).toBuffer()], program)[0].toBase58());
+
+  // getMultipleAccounts caps at 100 addresses per call.
+  for (let i = 0; i < pdas.length; i += 100) {
+    const slice = pdas.slice(i, i + 100);
+    const res = await r.call<{ value: ({ data: [string, string] } | null)[] }>(
+      "getMultipleAccounts", [slice, { encoding: "base64", commitment: "finalized" }]);
+    res.value.forEach((acc, j) => {
+      const mint = mints[i + j];
+      if (!acc) return;
+      const d = Buffer.from(acc.data[0], "base64");
+      // discriminator(8) | virtualTokenReserves | virtualSolReserves |
+      // realTokenReserves | realSolReserves | tokenTotalSupply | complete
+      if (d.length < 49) return;
+      const virtualToken = d.readBigUInt64LE(8);
+      const virtualSol = d.readBigUInt64LE(16);
+      const totalSupply = d.readBigUInt64LE(40);
+      const graduated = d[48] === 1;
+      if (graduated || virtualToken === 0n) {
+        out.set(mint, { marketCapLamports: null, graduated });
+        return;
+      }
+      out.set(mint, { marketCapLamports: (totalSupply * virtualSol) / virtualToken, graduated: false });
+    });
+  }
+  return out;
+}

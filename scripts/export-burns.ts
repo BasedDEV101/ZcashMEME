@@ -6,6 +6,10 @@
 // behind them, and the two are merged by signature.
 //
 //   node --experimental-strip-types scripts/export-burns.ts <mint> <SYMBOL> <minWholeTokens>
+//
+// With --only <signature,…> it judges just those transactions instead of
+// walking the history, for when a specific burn is known and the full scan
+// is not worth its RPC budget.
 
 import { FailoverRpc, PUBLIC_RPC_FALLBACK, readMint } from "../src/solana/rpc.ts";
 import { normalizeTransaction } from "../src/solana/normalize.ts";
@@ -15,9 +19,15 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const OUT = new URL("../api/_history.json", import.meta.url);
 const [mint, symbol, min = "0"] = process.argv.slice(2);
+const only = (() => {
+  const i = process.argv.indexOf("--only");
+  return i > 0 ? (process.argv[i + 1] ?? "").split(",").filter(Boolean) : null;
+})();
 if (!mint || !symbol) throw new Error("usage: export-burns.ts <mint> <SYMBOL> <minWholeTokens>");
 
-const url = solanaRpcUrl();
+// SOLANA_RPC lets a long scan run on a different endpoint than the live site,
+// so walking a million signatures cannot rate-limit the page.
+const url = process.env.SOLANA_RPC ?? solanaRpcUrl();
 console.log(`scanning ${symbol} ${mint} via ${describeRpc(url)}`);
 const rpc = new FailoverRpc(url, PUBLIC_RPC_FALLBACK);
 const { tokenProgramId, decimals } = await readMint(rpc, mint);
@@ -39,13 +49,15 @@ interface Checkpoint { before?: string; listed: number; candidates: string[]; do
 const CACHE = new URL(`../.cache/burn-scan-${mint}.json`, import.meta.url);
 mkdirSync(new URL("../.cache/", import.meta.url), { recursive: true });
 
-let ck: Checkpoint = { listed: 0, candidates: [] };
-try {
-  ck = JSON.parse(readFileSync(CACHE, "utf8"));
-  console.log(`resuming at ${ck.listed} signatures, ${ck.candidates.length} candidates`);
-} catch { /* first run */ }
+let ck: Checkpoint = { listed: 0, candidates: only ? [...only] : [], done: !!only };
+if (!only) {
+  try {
+    ck = JSON.parse(readFileSync(CACHE, "utf8"));
+    console.log(`resuming at ${ck.listed} signatures, ${ck.candidates.length} candidates`);
+  } catch { /* first run */ }
+}
 
-const save = () => writeFileSync(CACHE, JSON.stringify(ck));
+const save = () => { if (!only) writeFileSync(CACHE, JSON.stringify(ck)); };
 let pages = 0;
 while (!ck.done) {
   const page = await rpc.getSignaturesForAddress(mint, { before: ck.before, limit: 1000 });
@@ -80,10 +92,13 @@ for (const { signature } of candidates) {
         zcashAddress: null, ok: false, reason: v.reason });
 }
 
-// 3. merge with whatever is already in the snapshot for other mints.
+// 3. merge with whatever is already in the snapshot. A targeted run adds to
+//    the mint's existing burns; a full scan replaces them.
 let existing: { burns?: typeof burns } = {};
 try { existing = JSON.parse(readFileSync(OUT, "utf8")); } catch { /* first run */ }
-const kept = (existing.burns ?? []).filter((b) => b.mint !== mint);
+const seen = new Set(burns.map((b) => b.signature));
+const kept = (existing.burns ?? []).filter((b) =>
+  only ? !seen.has(b.signature) : b.mint !== mint);
 const all = [...kept, ...burns].sort((a, b) => b.slot - a.slot);
 writeFileSync(OUT, JSON.stringify({ updated: new Date().toISOString(), burns: all }, null, 2) + "\n");
 console.log(`${symbol}: ${burns.filter((b) => b.ok).length} valid, ${burns.filter((b) => !b.ok).length} refused`);

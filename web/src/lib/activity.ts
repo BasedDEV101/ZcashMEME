@@ -15,6 +15,9 @@ export interface ActivityCollection {
   burnCount: number;
   refusedCount: number;
   burners: number;
+  destroyedTokens: string | null;
+  marketCapLamports: string | null;
+  graduated: boolean;
 }
 
 export interface ActivityBurn {
@@ -35,6 +38,10 @@ export interface Activity {
   burns: ActivityBurn[];
   feeSol: number;
   historyUpdated: string | null;
+  /** When this was last rebuilt from chain. */
+  computedAt?: string;
+  /** True when an RPC failed and this is the last good answer instead. */
+  stale?: boolean;
 }
 
 type State =
@@ -80,3 +87,13 @@ export function when(unix: number | null): string {
 }
 
 export const SOLSCAN = "https://solscan.io";
+
+/** Lamports as SOL, at a readable number of digits for a market cap. */
+export function sol(lamports: string | null): string | null {
+  if (lamports === null) return null;
+  const n = Number(BigInt(lamports)) / 1e9;
+  if (n >= 1000) return `${Math.round(n).toLocaleString("en-US")} SOL`;
+  if (n >= 10) return `${n.toFixed(1)} SOL`;
+  if (n >= 0.01) return `${n.toFixed(2)} SOL`;
+  return `${n.toFixed(4)} SOL`;
+}

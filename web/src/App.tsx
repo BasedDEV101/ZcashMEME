@@ -36,6 +36,7 @@ function Page() {
   const loading = activity.status === "loading";
   const error = activity.status === "error" ? activity.message : null;
   const data = activity.status === "ready" ? activity.data : null;
+  const stale = data?.stale ?? false;
 
   useEffect(() => {
     fetch("/collections.json")
@@ -75,8 +76,8 @@ function Page() {
             </p>
           </section>
           <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={9} />
-          <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} />
-          <Burns burns={data?.burns ?? []} loading={loading} error={error} />
+          <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} />
+          <Burns burns={data?.burns ?? []} loading={loading} error={error} stale={stale} />
           <Footer />
         </main>
       </div>
@@ -229,6 +230,7 @@ function Page() {
           burns={data?.burns ?? []}
           loading={loading}
           error={error}
+          stale={stale}
           limit={8}
           onMore={() => go("/leaderboard")}
         />
