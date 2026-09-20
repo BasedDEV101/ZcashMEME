@@ -27,7 +27,7 @@ Traders first, but never at the cost of a claim the second audience could dispro
 
 ## Product Purpose
 
-A holder burns the Solana memecoin ($ZSA) and receives a Zcash NFT stamped with exactly how much they
+A holder burns the Solana memecoin ($STAMP) and receives a Zcash NFT stamped with exactly how much they
 burned. The tokens are destroyed; the NFT is the record. When Zcash activates native Shielded Assets, each
 NFT converts to that many shielded tokens.
 
@@ -68,11 +68,15 @@ Users arrive from Solana, likely from a pump.fun link or a post on X, frequently
 
 ## Brand Commitments
 
-- Ticker: **$ZSA**. Not yet launched. An earlier token $ZIP227
+- Ticker: **$STAMP**, token name **Zcash Shielded Assets**, live on Solana mainnet at
+  `EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc` (Token-2022, 6 decimals, 1,000,000,000 supply, mint
+  authority revoked). Name and symbol were read from the mint's own metadata, not assumed.
+  An earlier token $ZIP227
   (`8RSbsKW26WhHsFsM6jc34zSijvq6r7t6GmkYrfj8pump`) is live on Solana mainnet but is **not** this
   project and must never be wired into the config.
 - Project name: **Zcash Shielded Assets**.
-- NFT collection name: **undecided** — candidates are Notes, Ashes, Receipts. Do not invent one.
+- The collection is **Stamps**; a single item is a stamp. The design world is the Certificate of
+  Destruction, and stamp red is reserved for cancellation and irreversible action.
 - No Zcash Foundation or Electric Coin Co. logo, endorsement or implied affiliation. The name echoes a
   protocol feature; it does not claim to be that feature, nor any relationship with its authors.
 

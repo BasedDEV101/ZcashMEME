@@ -1,0 +1,12 @@
+bridge: EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc (mainnet) -> t1P2GcxGhzeM5tPk3r3JsGh1tEVArD4C2fB (mainnet)
+[ledger] 0 NFTs, 0 unclaimed, 0 rejected, 0 unresolved
+[ledger] 0 NFTs, 0 unclaimed, 0 rejected, 0 unresolved
+[watch] burn 4hCLg38i… valid: 1000000000000 -> t1P2GcxGhzeM5tPk3r3JsGh1tEVArD4C2fB
+[watch] 1 valid, 0 rejected
+[mint] commit 4d1bc810d6a0… (238 bytes, fee 10000 zat)
+[mint] reveal cceab338bfb3… (527 bytes, fee 20000 zat)
+[mint] minted cceab338bfb3d190c37370e7be24d1be6cb616dbbfa32f7224b5c79ee1a4b232i0 -> t1P2GcxGhzeM5tPk3r3JsGh1tEVArD4C2fB
+[ledger] 0 NFTs, 1 unclaimed, 0 rejected, 0 unresolved
+[ledger] 0 NFTs, 1 unclaimed, 0 rejected, 0 unresolved
+[index] found inscription cceab338bfb3d190c37370e7be24d1be6cb616dbbfa32f7224b5c79ee1a4b232i0 at t1P2GcxGhzeM5tPk3r3JsGh1tEVArD4C2fB
+[ledger] 1 NFTs, 0 unclaimed, 0 rejected, 0 unresolved

@@ -19,13 +19,16 @@ export const CONFIG: SiteConfig = {
   // Enabling it earlier would let people burn irreversibly and receive
   // nothing. An earlier token, $ZIP227 (8RSbsKW2...pump), is live on mainnet
   // but is NOT this project.
-  launched: false, // flip when the bridge is running and funded
-  ticker: "ZSA",
+  launched: true,
+  ticker: "STAMP",   // on-chain symbol is "Stamp"; shown uppercase as a ticker
   solanaMint: "EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc",
   tokenProgramId: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
   decimals: 6,
   minBurnTokens: 1_000_000n,
-  rpc: "https://api.mainnet-beta.solana.com",
+  // api.mainnet-beta.solana.com returns 403 to browsers by design, which made
+  // every burn fail at "failed to get recent blockhash". Verified from a real
+  // browser that this endpoint answers getLatestBlockhash with CORS.
+  rpc: "https://solana-rpc.publicnode.com",
   zcashNetwork: "main",
   protocol: "zsam",
 };

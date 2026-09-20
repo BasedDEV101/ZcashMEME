@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { getAssociatedTokenAddress } from "@solana/spl-token";
@@ -11,7 +11,7 @@ import { CONFIG, formatTokens } from "../lib/config.ts";
 type Destination = { kind: "generated"; wallet: GeneratedWallet } | { kind: "own"; address: string };
 
 export function BurnPanel() {
-  const { publicKey, connected, connect, select, wallets, sendTransaction } = useWallet();
+  const { publicKey, connected, connecting, connect, select, wallet, wallets, sendTransaction } = useWallet();
   const [dest, setDest] = useState<Destination | null>(null);
   const [saved, setSaved] = useState(false);
   const [own, setOwn] = useState("");
@@ -19,6 +19,17 @@ export function BurnPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+
+  // select() only records the choice; the provider needs a render to adopt it.
+  // Calling connect() in the same tick connects an adapter the provider has
+  // not adopted yet, so the UI reports connected while sendTransaction throws
+  // WalletNotSelectedError -- the failure lands on the burn click, not the
+  // connect click. Connect once the provider actually holds the wallet.
+  useEffect(() => {
+    if (wallet && !connected && !connecting) {
+      connect().catch((e: unknown) => setError((e as Error).message));
+    }
+  }, [wallet, connected, connecting, connect]);
 
   const address = dest?.kind === "generated" ? dest.wallet.address : dest?.kind === "own" ? own.trim() : "";
   const addressOk = useMemo(() => {
@@ -36,7 +47,9 @@ export function BurnPanel() {
 
   async function burn() {
     setError(null);
-    if (!publicKey || !CONFIG.solanaMint) return;
+    // Never fail silently on the button that destroys someone's tokens.
+    if (!publicKey) { setError("Wallet is not connected. Connect it in step 1 and try again."); return; }
+    if (!CONFIG.solanaMint) { setError("No mint is configured for this site yet."); return; }
     setBusy(true);
     try {
       const mint = new PublicKey(CONFIG.solanaMint);
@@ -58,7 +71,11 @@ export function BurnPanel() {
       const tx = new Transaction().add(...buildBurnInstructions(request));
       setSignature(await sendTransaction(tx, connection));
     } catch (e) {
-      setError((e as Error).message);
+      // Some wallet and token errors carry an empty message (TokenOwnerOffCurveError
+      // is one). A blank red line tells the user nothing, so fall back to the
+      // error's name.
+      const err = e as Error;
+      setError(err.message || err.name || "The wallet rejected the transaction.");
     } finally {
       setBusy(false);
     }
@@ -67,7 +84,9 @@ export function BurnPanel() {
   return (
     <div className="space-y-8">
       <Step n={1} label="Your Solana wallet">
-        {connected && publicKey ? (
+        {connecting ? (
+          <p className="text-sm text-ink-soft">Connecting…</p>
+        ) : connected && publicKey ? (
           <p className="tnum font-data text-sm break-all text-ink">{publicKey.toBase58()}</p>
         ) : wallets.length === 0 ? (
           <p className="text-sm text-ink-soft">
@@ -79,13 +98,9 @@ export function BurnPanel() {
               <button
                 key={w.adapter.name}
                 type="button"
-                onClick={async () => {
+                onClick={() => {
+                  setError(null);
                   select(w.adapter.name);
-                  try {
-                    await connect();
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
                 }}
                 className="border border-engrave/45 px-4 py-2 font-body text-sm text-engrave transition-colors hover:bg-engrave hover:text-paper"
               >
