@@ -15,6 +15,8 @@ import { assemble, commitment, decodeEnvelope, DUST_ZAT } from "./inscription.ts
 import type { Lightwalletd } from "./lightwalletd.ts";
 import { hex } from "./script.ts";
 import { inscriptionRows, saveInscription, type Store } from "../store/db.ts";
+import { buildRegistry, type CollectionCandidate, type Registry } from "../core/collection.ts";
+import { registryAddress } from "./funding.ts";
 import { parseNftContent as parseContent } from "../core/nft.ts";
 
 /** Read the first input's scriptSig out of a serialised transparent v5 tx. */
@@ -72,6 +74,43 @@ export async function findInscriptionsAt(lwd: Lightwalletd, address: string, cfg
     });
   }
   return found;
+}
+
+/**
+ * Read the collection registry off chain.
+ *
+ * Deploy records all land at one unspendable address, so the whole registry is
+ * one address lookup: no block scanning, and the same answer for anyone who
+ * runs it.
+ */
+export async function readRegistry(lwd: Lightwalletd, protocol: string, network: "main" | "test"): Promise<Registry> {
+  const address = registryAddress(network);
+  const utxos = await lwd.utxos(address);
+  const candidates: CollectionCandidate[] = [];
+  for (const u of utxos) {
+    let raw: Uint8Array;
+    let height: number;
+    try {
+      ({ raw, height } = await lwd.transaction(u.txid));
+    } catch {
+      continue;
+    }
+    const scriptSig = firstScriptSig(raw);
+    if (!scriptSig) continue;
+    const env = decodeEnvelope(scriptSig);
+    if (!env) continue;
+    const content = assemble(env.pieces);
+    if (env.commitment && hex(env.commitment) !== hex(commitment(env.contentType, content))) continue;
+    candidates.push({
+      inscriptionId: `${u.txid}i0`,
+      height: height || Number.MAX_SAFE_INTEGER,
+      txIndex: 0,
+      index: 0,
+      content,
+      contentType: env.contentType,
+    });
+  }
+  return buildRegistry(candidates, protocol, network);
 }
 
 /**

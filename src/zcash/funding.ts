@@ -18,7 +18,8 @@
 
 import { hmac } from "@noble/hashes/hmac";
 import { sha256 } from "@noble/hashes/sha2";
-import { TransparentKey } from "./wallet.ts";
+import { addressFromHash, hash160, TransparentKey } from "./wallet.ts";
+import { REGISTRY_PHRASE } from "../core/collection.ts";
 import type { ZcashNetwork } from "../core/zcash-address.ts";
 
 const DOMAIN = new TextEncoder().encode("zsam-collection-funding-v1");
@@ -34,4 +35,16 @@ export function fundingKeyFor(master: TransparentKey, solanaMint: string): Trans
 
 export function fundingAddressFor(master: TransparentKey, solanaMint: string, network: ZcashNetwork): string {
   return fundingKeyFor(master, solanaMint).address(network);
+}
+
+/**
+ * The registry address deploy records are sent to.
+ *
+ * hash160 of a fixed phrase, used directly as the P2PKH hash: finding a key
+ * for it means inverting the hash. So entries can be added by anyone and
+ * removed by no one, including us.
+ */
+export function registryAddress(network: ZcashNetwork): string {
+  const h = hash160(new TextEncoder().encode(REGISTRY_PHRASE));
+  return addressFromHash(h, network, "p2pkh");
 }

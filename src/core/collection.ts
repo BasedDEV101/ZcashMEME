@@ -15,6 +15,18 @@
 import { parseTransparentAddress, type ZcashNetwork } from "./zcash-address.ts";
 
 export const OP_DEPLOY = "deploy";
+
+/**
+ * Deploy records are delivered to one fixed address so the registry can be
+ * discovered by listing that address's outputs, rather than scanning every
+ * block for inscriptions (which lightwalletd cannot serve).
+ *
+ * The address is the hash of a fixed phrase, so no private key for it exists:
+ * a deploy inscription sent there can never be moved or spent away, and the
+ * registry cannot be edited after the fact. Anyone may inscribe to it; nobody
+ * can remove an entry.
+ */
+export const REGISTRY_PHRASE = "zsam registry v1 -- deploy records only, no key exists";
 export const VERSION = 1;
 
 export interface CollectionContent {
