@@ -5,7 +5,7 @@ import { Store } from "../src/store/db.ts";
 import { SolanaRpc, readMint } from "../src/solana/rpc.ts";
 import { watchPass } from "../src/solana/watcher.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
-import { loadOrCreateKey } from "../src/zcash/wallet.ts";
+import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
 import { mintPass } from "../src/zcash/minter.ts";
 import { indexPass } from "../src/zcash/indexer.ts";
 import { normalizeTransaction } from "../src/solana/normalize.ts";

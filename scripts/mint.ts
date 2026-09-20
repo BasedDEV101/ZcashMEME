@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { Store } from "../src/store/db.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
-import { loadOrCreateKey } from "../src/zcash/wallet.ts";
+import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
 import { mintPass, pendingBurns } from "../src/zcash/minter.ts";
 import type { BridgeConfig } from "../src/core/types.ts";
 

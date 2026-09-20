@@ -6,7 +6,7 @@
 // faucet's own published limits (0.1 TAZ per address per 24h).
 
 import { createHash } from "node:crypto";
-import { loadOrCreateKey } from "../src/zcash/wallet.ts";
+import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
 
 const BASE = process.env.FAUCET ?? "https://zcashfaucet.jinolabs.xyz";
 const { key } = loadOrCreateKey(process.env.ZCASH_KEY ?? "keys/zcash-testnet.hex");

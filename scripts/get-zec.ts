@@ -10,7 +10,7 @@
 
 import { Connection, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { loadOrCreateKeypair } from "../src/solana/wallet.ts";
-import { loadOrCreateKey } from "../src/zcash/wallet.ts";
+import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
 
 const MAX_SOL = 0.06;                                    // hard ceiling

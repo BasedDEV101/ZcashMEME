@@ -12,7 +12,7 @@ import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, Transact
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, setAuthority, AuthorityType, TOKEN_2022_PROGRAM_ID, createBurnCheckedInstruction } from "@solana/spl-token";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { loadOrCreateKeypair } from "../src/solana/wallet.ts";
-import { loadOrCreateKey } from "../src/zcash/wallet.ts";
+import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
 import { MEMO_V3 } from "../src/solana/programs.ts";
 

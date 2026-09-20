@@ -2,7 +2,9 @@
 // Used for Solana addresses/signatures (plain base58) and Zcash transparent
 // addresses (base58check).
 
-import { createHash } from "node:crypto";
+// @noble/hashes, not node:crypto: this runs in the browser too, where the
+// site derives a Zcash address client-side.
+import { sha256 } from "@noble/hashes/sha2";
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const INDEX = new Map([...ALPHABET].map((c, i) => [c, BigInt(i)]));
@@ -43,8 +45,7 @@ export function base58Decode(s: string): Uint8Array | null {
 }
 
 function sha256d(data: Uint8Array): Uint8Array {
-  const first = createHash("sha256").update(data).digest();
-  return new Uint8Array(createHash("sha256").update(first).digest());
+  return sha256(sha256(data));
 }
 
 export function base58CheckEncode(payload: Uint8Array): string {

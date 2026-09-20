@@ -1,6 +1,6 @@
 // Show (creating if needed) the minter's Zcash wallet address and balance.
 // The private key is written to a 0600 git-ignored file and never printed.
-import { loadOrCreateKey } from "../src/zcash/wallet.ts";
+import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
 
 const network = (process.env.ZCASH_NETWORK ?? "test") as "main" | "test";

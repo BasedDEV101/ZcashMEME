@@ -6,9 +6,7 @@
 import * as secp from "@noble/secp256k1";
 import { hmac } from "@noble/hashes/hmac";
 import { sha256 } from "@noble/hashes/sha2";
-import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { ripemd160 } from "@noble/hashes/legacy";
 import { base58CheckEncode } from "../core/base58.ts";
 import { TRANSPARENT_PREFIXES, type ZcashNetwork } from "../core/zcash-address.ts";
 import { compactToDer } from "./der.ts";
@@ -19,8 +17,7 @@ import { SIGHASH_ALL } from "./zip244.ts";
 secp.etc.hmacSha256Sync = (k: Uint8Array, ...m: Uint8Array[]) => hmac(sha256, k, secp.etc.concatBytes(...m));
 
 export function hash160(data: Uint8Array): Uint8Array {
-  const sha = createHash("sha256").update(Buffer.from(data)).digest();
-  return new Uint8Array(createHash("ripemd160").update(sha).digest());
+  return ripemd160(sha256(data));
 }
 
 export function p2pkhScript(hash: Uint8Array): Uint8Array {
@@ -46,7 +43,7 @@ export class TransparentKey {
 
   static generate(): TransparentKey {
     for (;;) {
-      const k = new Uint8Array(randomBytes(32));
+      const k = crypto.getRandomValues(new Uint8Array(32));
       try { return new TransparentKey(k); } catch { /* out of range, retry */ }
     }
   }
@@ -65,17 +62,4 @@ export class TransparentKey {
     const low = sig.hasHighS() ? sig.normalizeS() : sig;
     return concat(compactToDer(low.toBytes()), Uint8Array.from([hashType]));
   }
-}
-
-/** Load a key from a 0600 file, creating one if absent. The file holds hex only. */
-export function loadOrCreateKey(path: string): { key: TransparentKey; created: boolean } {
-  if (existsSync(path)) {
-    if ((statSync(path).mode & 0o777) !== 0o600) chmodSync(path, 0o600);
-    return { key: new TransparentKey(Uint8Array.from(Buffer.from(readFileSync(path, "utf8").trim(), "hex"))), created: false };
-  }
-  mkdirSync(dirname(path), { recursive: true });
-  const key = TransparentKey.generate();
-  writeFileSync(path, Buffer.from(key.privateKey).toString("hex"), { mode: 0o600 });
-  chmodSync(path, 0o600);
-  return { key, created: true };
 }

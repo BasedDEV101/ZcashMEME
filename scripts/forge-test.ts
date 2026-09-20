@@ -5,7 +5,7 @@
 // This is the "stolen minter key" scenario for real. Testnet only.
 import { readFileSync } from "node:fs";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
-import { loadOrCreateKey } from "../src/zcash/wallet.ts";
+import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
 import { buildInscription } from "../src/zcash/inscribe.ts";
 import { encodeNftBytes, CONTENT_TYPE, type NftContent } from "../src/core/nft.ts";
 import { Store } from "../src/store/db.ts";
