@@ -76,7 +76,7 @@ function Page() {
               listed; everything here was made on the pad.
             </p>
           </section>
-          <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={9} />
+          <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={8} />
           <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} />
           <Burns burns={data?.burns ?? []} loading={loading} error={error} stale={stale} />
           <Footer />
