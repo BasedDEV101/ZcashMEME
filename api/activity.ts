@@ -112,18 +112,24 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // Fetched in parallel but folded in order below, so which launch of a mint
     // wins does not depend on which request happened to answer first.
     const launchTxs = new Map<string, RpcTransaction>();
+    // Two different kinds of incomplete. A burn scan that got throttled costs
+    // one coin's recent burns; a launch that could not be read costs the coin
+    // itself, and a rebuild missing coins must never be saved over one that
+    // has them.
     let partial = false;
+    let launchesComplete = true;
     await inParallel(paid, WIDTH, async (s) => {
       try {
         const raw = await r.getTransaction(s.signature, "finalized");
         if (raw) launchTxs.set(s.signature, raw);
-        else partial = true;
+        else { partial = true; launchesComplete = false; }
       } catch {
         // A launch we could not read this time is missing from the list, not
         // wrong in it: the page still renders, but this rebuild is incomplete
         // and must not be saved over a complete one. Coins vanished from the
         // leaderboard between refreshes until this counted as partial.
         partial = true;
+        launchesComplete = false;
       }
     });
 
@@ -331,13 +337,16 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       partial,
       stale: false,
     };
-    // Worth keeping if it is substantially right. Requiring a flawless
-    // rebuild meant that on a 66-coin pad, where some single mint scan almost
-    // always gets throttled, the snapshot stopped being written at all -- so
-    // the fallback everyone depends on would have aged indefinitely. A run
-    // that read the mints and found the collections is good enough to stand
-    // in later; one that did not is not.
-    if (mintsRead && ranked.length > 0) await saveSnapshot(body);
+    // Worth keeping only if nothing is MISSING from it. A throttled burn scan
+    // costs detail and is fine to save; a launch that could not be read costs
+    // a whole coin, and such a rebuild once overwrote a 69-coin snapshot with
+    // a 46-coin one. The count is checked against the previous snapshot too,
+    // as a backstop for any other way of losing coins: the pad only grows, so
+    // a shorter list is a worse one.
+    const previous = Array.isArray(cached?.collections) ? cached.collections.length : 0;
+    if (launchesComplete && mintsRead && ranked.length >= previous && ranked.length > 0) {
+      await saveSnapshot(body);
+    }
     return json(res, 200, body, 120);
   } catch (e) {
     // Ask for the snapshot again rather than trusting the copy read at the
