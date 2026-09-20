@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd web && npm install && npm run build",
+  "buildCommand": "npm install --no-audit --no-fund && cd web && npm install --no-audit --no-fund && npm run build",
   "outputDirectory": "web/dist",
-  "installCommand": "echo root install skipped; the app lives in web/",
+  "installCommand": "echo deferred to buildCommand: this repo installs at two levels",
   "framework": null,
   "rewrites": [
     {
