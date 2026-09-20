@@ -16,17 +16,33 @@ await page.addInitScript(MOCK);
 // unset, the run exercises the real /api/metadata.
 if (process.env.STUB_UPLOAD) await page.route("**/api/metadata", (route) =>
   route.fulfill({ status: 200, contentType: "application/json",
-    body: JSON.stringify({ uri: "https://example.com/meta.json", image: "https://example.com/i.png" }) }));
+    // Same shape and length as a real one, so the size this measures is the
+    // size production actually builds.
+    body: JSON.stringify({ uri: "https://www.zcashstamp.com/m/muaen0pm3ja.json", image: "https://example.com/i.png" }) }));
 
-await page.goto(`${URL}/launch`, { waitUntil: "networkidle" });
-await page.waitForTimeout(1000);
+// The mock wallet returns a signature no RPC has heard of, so confirmation
+// would never resolve and the second transaction would never be built. Report
+// it confirmed so the rest of the flow runs.
+await page.route(/solana-rpc|helius|mainnet-beta/, async (route) => {
+  const body = JSON.parse(route.request().postData() ?? "{}");
+  if (body.method === "getSignatureStatuses") {
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      jsonrpc: "2.0", id: body.id,
+      result: { context: { slot: 1 }, value: [{ slot: 1, confirmations: 1, err: null, confirmationStatus: "confirmed" }] },
+    })});
+  }
+  return route.continue();
+});
+
+await page.goto(`${URL}/launch`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
 console.log("1. page           :", (await page.locator("h1").innerText()).trim());
 console.log("2. register table :", (await page.locator("body").innerText()).includes("The register") ? "present" : "MISSING");
 
 await page.getByRole("button", { name: /mockwallet/i }).click();
 await page.waitForTimeout(800);
-await page.getByLabel(/^name$/i).fill("Test Coin");
-await page.getByLabel(/ticker/i).fill("TSTC");
+await page.getByLabel(/^name$/i).fill("Thirty Two Character Coin Name!!");
+await page.getByLabel(/ticker/i).fill("TENCHARTIK");
 await page.getByLabel(/description/i).fill("a test");
 await page.getByLabel(/^website$/i).fill("https://example.com");
 await page.getByLabel(/x link/i).fill("https://x.com/test");
@@ -39,9 +55,10 @@ await btn.click();
 await page.waitForTimeout(3500);
 
 const captured = await page.evaluate(() => window.__captured ?? []);
-console.log("4. tx built       :", captured.length > 0);
-if (captured.length) {
-  const raw = Uint8Array.from(captured[0]);
+console.log("4. txs built      :", captured.length);
+for (const [n, cap] of captured.entries()) {
+  const raw = Uint8Array.from(cap);
+  console.log(`   --- tx ${n + 1}: ${raw.length} bytes (limit 1232) ---`);
   let msg;
   try { msg = VersionedTransaction.deserialize(raw).message; } catch { msg = Transaction.from(raw).compileMessage(); }
   const keys = (msg.staticAccountKeys ?? msg.accountKeys).map((k) => k.toBase58());
@@ -53,6 +70,7 @@ if (captured.length) {
       let l = 0n; for (let i = 11; i >= 4; i--) l = (l << 8n) | BigInt(data[i]);
       console.log("   launch fee        :", Number(l)/1e9, "SOL ->", keys[(ix.accountKeyIndexes ?? ix.accounts)[1]].slice(0,10)+"…");
     } else if (prog === MEMO) console.log("   registers as      :", new TextDecoder().decode(data));
+    else console.log("   other program     :", prog.slice(0, 10) + "…", data.length, "bytes");
   }
 }
 console.log("console errors    :", errs.length);

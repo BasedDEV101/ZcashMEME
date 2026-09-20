@@ -17,6 +17,7 @@
     "@solana/wallet-adapter-base": "^0.9.28",
     "@solana/wallet-adapter-react": "^0.15.40",
     "@solana/web3.js": "^1.99.0",
+    "bn.js": "^5.2.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -25,6 +26,7 @@
     "@fontsource/courier-prime": "^5.3.0",
     "@fontsource/libre-franklin": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/bn.js": "^5.2.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",

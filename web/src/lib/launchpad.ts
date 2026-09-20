@@ -8,20 +8,30 @@ import { assertNotForbidden } from "@protocol/core/forbidden.ts";
  * Deliberately small: the pad earns from pump.fun's creator fees on every
  * trade, so the launch fee is not the business model. It exists to make
  * spamming the register cost something. */
-export const LAUNCH_FEE_SOL = 0.1;
+export const LAUNCH_FEE_SOL = 0.5;
 export const LAUNCH_FEE_LAMPORTS = BigInt(Math.round(LAUNCH_FEE_SOL * 1e9));
 
 /** Fees land here. Change this to move launch revenue to a different wallet. */
 export const OPERATOR_ADDRESS = "mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS";
 
+/**
+ * The creator fee every coin launched here charges, and where it goes.
+ *
+ * pump.fun caps a configurable creator fee at 300 bps and only honours one
+ * while its `creatorFeeConfigurable` gate is on; both were checked against the
+ * live Global before settling on 200. The launcher still creates the coin and
+ * is its creator on pump.fun -- the fee is redirected by a fee-sharing config,
+ * not by taking their name off it.
+ */
+export const CREATOR_FEE_BPS = 200;
+export const CREATOR_FEE_PERCENT = CREATOR_FEE_BPS / 100;
+
 /** Roughly what one stamp costs the collection's funding balance, in ZEC. */
 export const STAMP_COST_ZEC = 0.00030546;
 
 /** Stamps the launch fee pays for. Matches ALLOWANCE_STAMPS in
-    src/zcash/autofund.ts, which is what actually enforces it. Scaled to what
-    a 0.1 SOL fee covers, so the promise on the page is one the pad can keep
-    even if ZEC moves against SOL. */
-export const ALLOWANCE_STAMPS = 500;
+    src/zcash/autofund.ts, which is what actually enforces it. */
+export const ALLOWANCE_STAMPS = 2000;
 
 export interface Collection {
   sym: string;

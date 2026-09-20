@@ -13,6 +13,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { put } from "@vercel/blob";
 
+const SITE = "https://www.zcashstamp.com";
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const EXT: Record<string, string> = {
   "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp",
@@ -69,7 +70,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (image.length > MAX_IMAGE_BYTES) return send(400, { error: "Image must be under 2 MB." });
 
   try {
-    const slug = `${symbol.toLowerCase()}-${Date.now().toString(36)}`;
+    // Short, stable slug: the metadata URI travels inside the launch
+    // transaction, which is 18 bytes under Solana's 1232-byte limit with a
+    // blob URL in it -- a long coin name would push it over. Served from our
+    // own domain at /m/<slug>.json, which is 73 bytes shorter.
+    // Short on purpose: the URI rides inside the create instruction, and a
+    // 32-character name with a 10-character ticker leaves little room.
+    const slug = `${Date.now().toString(36).slice(-5)}${Math.random().toString(36).slice(2, 6)}`;
     const stored = await put(`coins/${slug}.${EXT[imageType]}`, image, {
       access: "public", contentType: imageType, addRandomSuffix: true,
     });
@@ -79,10 +86,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       ...(twitter ? { twitter } : {}),
       createdOn: "https://www.zcashstamp.com",
     };
-    const meta = await put(`coins/${slug}.json`, JSON.stringify(metadata, null, 2), {
-      access: "public", contentType: "application/json", addRandomSuffix: true,
+    await put(`coins/${slug}.json`, JSON.stringify(metadata, null, 2), {
+      access: "public", contentType: "application/json", addRandomSuffix: false,
+      allowOverwrite: true,
     });
-    return send(200, { uri: meta.url, image: stored.url, metadata });
+    return send(200, { uri: `${SITE}/m/${slug}.json`, image: stored.url, metadata });
   } catch (e) {
     return send(502, { error: `Storing the image failed: ${(e as Error).message}` });
   }

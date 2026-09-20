@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Connection } from "@solana/web3.js";
 import { buildLaunch, uploadMetadata, type CoinDetails } from "../lib/createCoin.ts";
-import { LAUNCH_FEE_SOL, STAMP_COST_ZEC } from "../lib/launchpad.ts";
+import { CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC } from "../lib/launchpad.ts";
 import { CONFIG } from "../lib/config.ts";
 
-type Stage = "idle" | "uploading" | "signing" | "sending" | "done";
+type Stage = "idle" | "uploading" | "signing" | "sending" | "registering" | "done";
 
 export function CreateCoinPanel() {
   const { publicKey, connected, connecting, connect, disconnect, select, wallet, wallets, sendTransaction } = useWallet();
@@ -43,12 +43,18 @@ export function CreateCoinPanel() {
       const { uri } = await uploadMetadata(file, d);
 
       setStage("signing");
-      const { transaction, mint } = await buildLaunch(publicKey, uri, d);
+      const { create, register, mint } = await buildLaunch(publicKey, uri, d);
 
       setStage("sending");
       const conn = new Connection(CONFIG.rpc, "confirmed");
       // The mint is a fresh keypair and must sign its own creation.
-      const signature = await sendTransaction(transaction, conn, { signers: [mint] });
+      const signature = await sendTransaction(create, conn, { signers: [mint] });
+      await conn.confirmTransaction(signature, "confirmed");
+
+      // Second signature: the register entry cannot be requested until the
+      // coin it names exists.
+      setStage("registering");
+      await sendTransaction(register, conn);
       setResult({ mint: mint.publicKey.toBase58(), signature });
       setStage("done");
     } catch (e) {
@@ -177,12 +183,20 @@ export function CreateCoinPanel() {
           className="w-full bg-stamp px-6 py-4 font-display text-lg tracking-[0.06em] text-paper uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-ink-soft/25 disabled:text-ink-soft sm:w-auto sm:px-12">
           {stage === "uploading" ? "Storing the image…"
             : stage === "signing" ? "Building the launch…"
-            : stage === "sending" ? "Confirm in your wallet…"
+            : stage === "sending" ? "Confirm in your wallet (1 of 2)…"
+            : stage === "registering" ? "Confirm in your wallet (2 of 2)…"
             : `Launch for ${LAUNCH_FEE_SOL} SOL`}
         </button>
         <p className="mt-3 max-w-[60ch] text-sm text-ink-soft">
-          One signature creates the coin on pump.fun, pays the launch fee, and registers its collection.
-          Creating a coin also costs the usual pump.fun rent, around 0.02 SOL.
+          Two signatures: the first creates the coin on pump.fun, the second routes its creator fee,
+          pays the launch fee and registers its collection. Creating a coin also costs the usual
+          pump.fun rent, around 0.02 SOL.
+        </p>
+        {/* Stated next to the button too: this is where the decision is made,
+            and the fee is set at creation. */}
+        <p className="mt-2 max-w-[60ch] text-sm text-ink-soft">
+          Your coin carries a {CREATOR_FEE_PERCENT}% creator fee that goes to the pad, which is what pays
+          for your holders' stamps. You are still the creator of the coin.
         </p>
         {error && <p className="mt-3 max-w-[58ch] text-sm text-stamp-deep">{error}</p>}
       </div>

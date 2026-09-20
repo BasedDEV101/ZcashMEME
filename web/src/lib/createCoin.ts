@@ -3,7 +3,8 @@ import { PumpSdk } from "@pump-fun/pump-sdk";
 import { encodeDeployRequest } from "@protocol/core/deploy-request.ts";
 import { MEMO_V3 } from "@protocol/solana/programs.ts";
 import { assertNotForbidden } from "@protocol/core/forbidden.ts";
-import { LAUNCH_FEE_LAMPORTS, OPERATOR_ADDRESS } from "./launchpad.ts";
+import BN from "bn.js";
+import { CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, OPERATOR_ADDRESS } from "./launchpad.ts";
 
 export interface CoinDetails {
   name: string;
@@ -40,18 +41,29 @@ export async function uploadMetadata(file: File, d: CoinDetails): Promise<Upload
 }
 
 export interface BuiltLaunch {
-  transaction: Transaction;
+  /** Creates the coin on pump.fun, with its 2% creator fee set. */
+  create: Transaction;
+  /** Points that fee at the pad, pays the launch fee, and asks for the
+      collection — together, so a coin cannot be registered here without its
+      fee being routed. */
+  register: Transaction;
   mint: Keypair;
 }
 
 /**
- * One transaction that does the whole launch:
- *   1. create the coin on pump.fun
- *   2. pay the launch fee
- *   3. request its collection, as a memo the operator's watcher reads
+ * The launch, in two signatures.
  *
- * One signature, so a launcher cannot end up with a coin and no collection, or
- * a paid fee and no coin.
+ * It was one, until the fee-sharing instructions pushed it past Solana's
+ * 1232-byte limit -- 1370 bytes with everything in one, and still 1268 with
+ * the create alone once a 32-character name and a 10-character ticker were
+ * used, which is what the form allows.
+ *
+ * So the create stands alone, and everything else rides together: pointing
+ * the creator fee at the pad, paying the launch fee, and asking for the
+ * collection. Those three are the ones that must not come apart -- a coin
+ * cannot end up on this register without its fee routed, because the same
+ * signature does both. A launcher who stops after the first signature has an
+ * ordinary pump.fun coin, no collection, and has paid us nothing.
  */
 export async function buildLaunch(payer: PublicKey, uri: string, d: CoinDetails): Promise<BuiltLaunch> {
   assertNotForbidden(payer.toBase58(), "a coin launch");
@@ -63,10 +75,12 @@ export async function buildLaunch(payer: PublicKey, uri: string, d: CoinDetails)
     name: d.name,
     symbol: d.symbol,
     uri,
-    // The launcher is the creator of their own coin, so pump.fun's creator
-    // fees go to them. The pad takes its launch fee and nothing else.
+    // The launcher creates the coin and is its creator on pump.fun. The
+    // creator FEE is redirected to the pad by the fee-sharing config below --
+    // the coin is still theirs, and it is not launched from our wallet.
     creator: payer,
     user: payer,
+    creatorFeeBps: new BN(CREATOR_FEE_BPS),
     // Never on. Mayhem doubles the supply to 2B and lets pump's agent burn
     // tokens on its own -- burns nobody authorised, which would mint stamps
     // and wreck the collection's accounting.
@@ -77,6 +91,19 @@ export async function buildLaunch(payer: PublicKey, uri: string, d: CoinDetails)
     fromPubkey: payer,
     toPubkey: new PublicKey(OPERATOR_ADDRESS),
     lamports: Number(LAUNCH_FEE_LAMPORTS),
+  });
+
+  // Route that creator fee to the pad. Two instructions: the config exists
+  // first, then its shares are set. `pool: null` because a coin being created
+  // has no pool yet -- it starts on a bonding curve. The launcher signs these,
+  // because the config's authority is the coin's creator, which is them.
+  const operator = new PublicKey(OPERATOR_ADDRESS);
+  const sharingConfig = await sdk.createFeeSharingConfig({ creator: payer, mint: mint.publicKey, pool: null });
+  const shares = await sdk.updateFeeShares({
+    authority: payer,
+    mint: mint.publicKey,
+    currentShareholders: [payer],
+    newShareholders: [{ address: operator, shareBps: 10_000 }],
   });
 
   const register = new TransactionInstruction({
@@ -91,5 +118,9 @@ export async function buildLaunch(payer: PublicKey, uri: string, d: CoinDetails)
     ) as unknown as Buffer,
   });
 
-  return { transaction: new Transaction().add(create, fee, register), mint };
+  return {
+    create: new Transaction().add(create),
+    register: new Transaction().add(sharingConfig, shares, fee, register),
+    mint,
+  };
 }

@@ -6,7 +6,7 @@ import { Guilloche, GuillocheBand } from "./components/Guilloche.tsx";
 import { CONFIG, PROOF, SOURCE_URL, formatTokens } from "./lib/config.ts";
 import { CreateCoinPanel } from "./components/CreateCoinPanel.tsx";
 import { Registry } from "./components/Registry.tsx";
-import { ALLOWANCE_STAMPS, LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
+import { ALLOWANCE_STAMPS, CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
 import { Leaderboard } from "./components/Leaderboard.tsx";
 import { Burns } from "./components/Burns.tsx";
 import { LatestCoins } from "./components/LatestCoins.tsx";
@@ -105,15 +105,18 @@ function Page() {
               <CreateCoinPanel />
               <aside className="space-y-6 border-t border-engrave/20 pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
                 <h3 className="font-display text-xl text-engrave">How it works</h3>
-                <Warning title="One signature does everything">
-                  It creates the coin on pump.fun, pays the {LAUNCH_FEE_SOL} SOL launch fee, and registers
-                  its collection. You cannot end up with a coin and no collection, or a paid fee and no
-                  coin.
+                <Warning title="Two signatures, in order">
+                  The first creates the coin on pump.fun. The second routes its creator fee, pays the
+                  {" "}{LAUNCH_FEE_SOL} SOL launch fee and registers its collection — all together, so a
+                  coin cannot be listed here without its fee routed. Stop after the first and you have an
+                  ordinary pump.fun coin, unregistered, having paid us nothing.
                 </Warning>
-                <Warning title="The coin is yours">
-                  You are the creator on pump.fun, so the creator fees on every trade go to you. The
-                  {" "}{LAUNCH_FEE_SOL} SOL launch fee is all the pad takes, and it is there so that
-                  filling the register with junk costs something.
+                <Warning title="The coin is yours; the creator fee is the pad's">
+                  You create it from your own wallet and you are its creator on pump.fun. It carries a
+                  {" "}{CREATOR_FEE_PERCENT}% creator fee, and that fee goes to the pad — it is what
+                  pays to inscribe your holders' stamps. You still own every token you buy, and nothing
+                  about the coin is held by us. If you want the creator fee yourself, launch on pump.fun
+                  directly instead.
                 </Warning>
                 <Warning title="Mayhem mode is off">
                   It would double the supply and let pump's agent burn tokens on its own — burns nobody

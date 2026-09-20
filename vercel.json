@@ -6,6 +6,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/m/:slug",
+      "destination": "/api/meta?slug=:slug"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/"
     }
