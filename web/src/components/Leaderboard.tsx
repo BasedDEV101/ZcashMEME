@@ -3,14 +3,35 @@ import { GuillocheBand } from "./Guilloche.tsx";
 import { SearchField } from "./Field.tsx";
 import { SOLSCAN, short, sol, tokens, when, type ActivityCollection } from "../lib/activity.ts";
 
-type Sort = "burns" | "marketCap" | "destroyed" | "newest";
+type Sort = "burns" | "marketCap" | "destroyed" | "newest" | "oldest";
 
 const SORTS: { key: Sort; label: string; blurb: string }[] = [
   { key: "burns", label: "Burns", blurb: "ranked by tokens destroyed for a certificate" },
   { key: "marketCap", label: "Market cap", blurb: "ranked by market cap" },
   { key: "destroyed", label: "Supply gone", blurb: "ranked by every token destroyed, certificate or not" },
   { key: "newest", label: "Newest", blurb: "most recently launched first" },
+  { key: "oldest", label: "Oldest", blurb: "the register from its first entry" },
 ];
+
+/**
+ * A coin's place in the register: the slot it was registered at.
+ *
+ * Ordered by this rather than by block time, because it is the register's own
+ * sequence and cannot tie. A coin with no registration slot -- the flagship,
+ * which predates the pad -- has no place in that sequence and sorts last
+ * either way round rather than claiming one end of it.
+ */
+const place = (c: ActivityCollection): number | null =>
+  c.slot && c.slot > 0 ? c.slot : null;
+
+function bySlot(a: ActivityCollection, b: ActivityCollection, direction: 1 | -1): number {
+  const x = place(a);
+  const y = place(b);
+  if (x === null && y === null) return 0;
+  if (x === null) return 1;
+  if (y === null) return -1;
+  return (x - y) * direction;
+}
 
 /** Rows shown before asking. The register runs to hundreds; the screen does not. */
 const PAGE = 20;
@@ -28,7 +49,9 @@ function order(a: ActivityCollection, b: ActivityCollection, by: Sort): number {
       return d === 0n ? 0 : d > 0n ? 1 : -1;
     }
     case "newest":
-      return (b.launchedAt ?? 0) - (a.launchedAt ?? 0);
+      return bySlot(a, b, -1);
+    case "oldest":
+      return bySlot(a, b, 1);
     default: {
       const d = BigInt(b.burnedTokens) - BigInt(a.burnedTokens);
       return d === 0n ? (b.launchedAt ?? 0) - (a.launchedAt ?? 0) : d > 0n ? 1 : -1;
@@ -64,6 +87,13 @@ export function Leaderboard({ collections, loading, error, stale }: {
   const [by, setBy] = useState<Sort>("burns");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
+
+  // The register's first entry, worked out from the register rather than
+  // named: whichever listed coin was registered at the lowest slot is the one
+  // that opened it, and stays so as coins are added.
+  const firstEntry = collections
+    .filter((c) => (c.slot ?? 0) > 0)
+    .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))[0]?.mint;
 
   const found = collections.filter((c) => matches(c, query));
   const ranked = [...found].sort((a, b) => order(a, b, by));
@@ -121,7 +151,13 @@ export function Leaderboard({ collections, loading, error, stale }: {
       ) : (
         <ol className="mt-7">
           {shown.map((c, i) => (
-            <Row key={c.mint} collection={c} rank={searching ? null : i + 1} by={by} />
+            <Row
+              key={c.mint}
+              collection={c}
+              rank={searching ? null : i + 1}
+              by={by}
+              first={c.mint === firstEntry}
+            />
           ))}
         </ol>
       )}
@@ -151,7 +187,9 @@ export function Leaderboard({ collections, loading, error, stale }: {
   );
 }
 
-function Row({ collection: c, rank, by }: { collection: ActivityCollection; rank: number | null; by: Sort }) {
+function Row({ collection: c, rank, by, first }: {
+  collection: ActivityCollection; rank: number | null; by: Sort; first?: boolean;
+}) {
   return (
     <li className="grid grid-cols-[2rem_2.5rem_minmax(0,1fr)_auto] items-center gap-x-4 border-b border-engrave/12 py-3.5 first:border-t first:border-engrave/25">
       <span className="tnum font-display text-[1.05rem] leading-none text-engrave/50">
@@ -177,10 +215,15 @@ function Row({ collection: c, rank, by }: { collection: ActivityCollection; rank
             {c.symbol}
           </a>
           {c.name && <span className="truncate text-[0.85rem] text-ink-soft">{c.name}</span>}
+          {first && (
+            <span className="shrink-0 border border-engrave/35 px-1.5 py-[1px] font-body text-[0.52rem] font-semibold tracking-[0.14em] text-engrave uppercase">
+              First entry
+            </span>
+          )}
         </div>
         <p className="tnum mt-0.5 font-data text-[0.66rem] text-ink-soft">
           {short(c.mint, 5)}
-          {c.launchedAt && <> · {when(c.launchedAt)}</>}
+          {c.launchedAt && by !== "newest" && by !== "oldest" && <> · {when(c.launchedAt)}</>}
           {c.burners > 0 && <> · {c.burners} burning</>}
           {c.refusedCount > 0 && <> · {c.refusedCount} refused</>}
         </p>
@@ -199,14 +242,14 @@ function Row({ collection: c, rank, by }: { collection: ActivityCollection; rank
 function headline(c: ActivityCollection, by: Sort): string {
   if (by === "marketCap") return sol(c.marketCapLamports) ?? "—";
   if (by === "destroyed") return c.destroyedTokens === null ? "—" : tokens(c.destroyedTokens);
-  if (by === "newest") return when(c.launchedAt);
+  if (by === "newest" || by === "oldest") return when(c.launchedAt);
   return tokens(c.burnedTokens);
 }
 
 function caption(c: ActivityCollection, by: Sort): string {
   if (by === "marketCap") return "market cap";
   if (by === "destroyed") return "supply destroyed";
-  if (by === "newest") return "launched";
+  if (by === "newest" || by === "oldest") return "launched";
   return c.burnCount === 1 ? "burned · 1 certificate" : `burned · ${c.burnCount} certificates`;
 }
 
