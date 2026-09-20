@@ -10,7 +10,13 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "paths": { "@protocol/*": ["../src/*"] }
+    "paths": {
+      "@protocol/*": ["../src/*"],
+      // @noble/hashes 1.8 ships declarations but its exports map carries no
+      // "types" condition, so bundler resolution cannot find them. Point TS at
+      // the files directly; Vite resolves the runtime imports itself.
+      "@noble/hashes/*": ["./node_modules/@noble/hashes/*"]
+    }
   },
   "include": ["src", "vite.config.ts"]
 }
