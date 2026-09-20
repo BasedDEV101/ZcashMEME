@@ -42,4 +42,8 @@ export const PROOF = {
   forgedReveal: "d54660626ac2464cdaac7009e5b0b93f8b705e6236b24455edde8a34faffc0b7",
 };
 
+/** The code behind all of this. The rules on this site are only checkable if
+    the implementation of them is readable. */
+export const SOURCE_URL = "https://github.com/BasedDEV101/ZcashMEME";
+
 export const formatTokens = (n: bigint): string => n.toLocaleString("en-US");

@@ -13,6 +13,8 @@ import { watchPass } from "../src/solana/watcher.ts";
 import { Lightwalletd } from "../src/zcash/lightwalletd.ts";
 import { loadOrCreateKey } from "../src/zcash/keyfile.ts";
 import { fundingKeyFor, fundingAddressFor } from "../src/zcash/funding.ts";
+import { buildPayment } from "../src/zcash/pay.ts";
+import { ALLOWANCE_ZAT, STAMP_COST_ZAT, planTopUp, stamps } from "../src/zcash/autofund.ts";
 import { readRegistry } from "../src/zcash/indexer.ts";
 import { mintPass } from "../src/zcash/minter.ts";
 import { indexPass } from "../src/zcash/indexer.ts";
@@ -25,9 +27,52 @@ const rpc = new SolanaRpc(solanaRpcUrl());
 const lwd = new Lightwalletd(network === "main" ? "zec.rocks:443" : "testnet.zec.rocks:443");
 const { key: master } = loadOrCreateKey(process.env.ZCASH_KEY ?? `keys/zcash-${network}net.hex`);
 const interval = Number(process.env.LAUNCHPAD_INTERVAL ?? 45) * 1000;
-const STAMP_COST = 30546n;
+const STAMP_COST = STAMP_COST_ZAT;
+// LAUNCHPAD_AUTOFUND=0 turns automatic top-ups off and goes back to asking
+// each launcher to fund their own collection.
+const autofund = process.env.LAUNCHPAD_AUTOFUND !== "0";
 
 console.log(`launchpad on ${network}net, protocol ${protocol}`);
+console.log(autofund
+  ? `autofund on: up to ${stamps(ALLOWANCE_ZAT)} stamps per collection, from ${master.address(network)}`
+  : "autofund off: collections must be funded by their launcher");
+
+/**
+ * Top a collection up out of the launch fee, so a launcher never has to buy
+ * ZEC before their holders can burn.
+ *
+ * Bounded by planTopUp: a collection can only ever draw what its own fee
+ * covers, and the operator keeps a reserve back, so one viral coin cannot
+ * drain the wallet every other collection depends on. What a collection has
+ * already drawn lives in its own store, so restarting the process cannot
+ * replay a top-up.
+ */
+async function topUp(mint: string, store: Store, balanceZat: bigint, tag: string): Promise<boolean> {
+  const sent = BigInt(store.getCursor("autofund:sentZat") ?? "0");
+  const operatorUtxos = await lwd.utxos(master.address(network));
+  const operatorZat = operatorUtxos.reduce((t, u) => t + u.valueZat, 0n);
+  const plan = planTopUp({ balanceZat, sentZat: sent, operatorZat });
+  if (plan.amountZat === 0n) {
+    if (balanceZat < STAMP_COST) console.log(`${tag} not topping up: ${plan.reason}`);
+    return false;
+  }
+  const info = await lwd.info();
+  const tx = buildPayment({
+    key: master,
+    utxos: operatorUtxos,
+    to: fundingAddressFor(master, mint, network),
+    amountZat: plan.amountZat,
+    network,
+    consensusBranchId: info.consensusBranchId,
+    chainHeight: info.blockHeight,
+  });
+  await lwd.send(tx.raw, info.blockHeight);
+  // Recorded only once the network has accepted it: a send that threw must
+  // not count against the collection's allowance.
+  store.setCursor("autofund:sentZat", (sent + plan.amountZat).toString());
+  console.log(`${tag} topped up ${plan.reason} (${tx.txid}); spendable in a block or two`);
+  return true;
+}
 
 for (let pass = 1; ; pass++) {
   try {
@@ -77,10 +122,18 @@ for (let pass = 1; ; pass++) {
         const funds = (await lwd.utxos(fundKey.address(network))).reduce((s, u) => s + u.valueZat, 0n);
 
         if (ledger.unclaimed.length === 0) {
+          // Top up before anything is owed, not after: a collection funded
+          // only once a holder has already burned makes that holder wait a
+          // confirmation for a stamp that should have been immediate.
+          if (autofund) await topUp(c.mint, store, funds, tag);
           if (pass % 10 === 1) console.log(`${tag} ${ledger.nfts.length} stamps, nothing owed, ${Number(funds) / 1e8} ZEC funding`);
         } else if (funds < STAMP_COST) {
-          console.log(`${tag} ${ledger.unclaimed.length} stamp(s) owed but funding is empty (${funds} zat)`);
-          console.log(`${tag} fund ${fundingAddressFor(master, c.mint, network)} to release them`);
+          console.log(`${tag} ${ledger.unclaimed.length} stamp(s) owed, funding is empty (${funds} zat)`);
+          // A top-up needs a confirmation before it can be spent, so this pass
+          // ends here either way; the next one mints what is owed.
+          if (!autofund || !(await topUp(c.mint, store, funds, tag))) {
+            console.log(`${tag} fund ${fundingAddressFor(master, c.mint, network)} to release them`);
+          }
         } else {
           const minted = await mintPass({ key: fundKey, lwd, cfg, log: (m) => console.log(`${tag} ${m}`) }, store, ledger.unclaimed);
           console.log(`${tag} minted ${minted.length}, ${ledger.nfts.length} stamps total`);

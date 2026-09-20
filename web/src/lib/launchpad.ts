@@ -13,6 +13,10 @@ export const OPERATOR_ADDRESS = "mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS";
 /** Roughly what one stamp costs the collection's funding balance, in ZEC. */
 export const STAMP_COST_ZEC = 0.00030546;
 
+/** Stamps the launch fee pays for. Matches ALLOWANCE_STAMPS in
+    src/zcash/autofund.ts, which is what actually enforces it. */
+export const ALLOWANCE_STAMPS = 2000;
+
 export interface Collection {
   sym: string;
   mint: string;

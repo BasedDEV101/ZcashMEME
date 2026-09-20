@@ -70,6 +70,11 @@ export function Registry({ collections, updated }: { collections: Collection[]; 
         This table is a snapshot. The register itself lives on Zcash, at a fixed address whose key nobody
         holds — anyone can add a collection, nobody can remove one, including us.
       </p>
+      <p className="mt-3 max-w-[64ch] text-sm text-ink-soft">
+        Funding is topped up automatically out of each collection's launch fee, so a balance reading empty
+        here is usually one whose top-up has not confirmed yet. Anyone can add to any of these addresses;
+        only that collection's stamps can ever be paid from it.
+      </p>
     </section>
   );
 }

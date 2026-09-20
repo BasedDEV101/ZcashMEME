@@ -3,10 +3,10 @@ import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react
 import { Certificate } from "./components/Certificate.tsx";
 import { BurnPanel } from "./components/BurnPanel.tsx";
 import { Guilloche, GuillocheBand } from "./components/Guilloche.tsx";
-import { CONFIG, PROOF, formatTokens } from "./lib/config.ts";
+import { CONFIG, PROOF, SOURCE_URL, formatTokens } from "./lib/config.ts";
 import { CreateCoinPanel } from "./components/CreateCoinPanel.tsx";
 import { Registry } from "./components/Registry.tsx";
-import { LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
+import { ALLOWANCE_STAMPS, LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
 import { Leaderboard } from "./components/Leaderboard.tsx";
 import { Burns } from "./components/Burns.tsx";
 import { useActivity } from "./lib/activity.ts";
@@ -111,10 +111,13 @@ function Page() {
                   It would double the supply and let pump's agent burn tokens on its own — burns nobody
                   authorised, which would issue stamps and wreck your collection's accounting.
                 </Warning>
-                <Warning title="Your collection pays for its own stamps">
-                  Each stamp costs about {STAMP_COST_ZEC} ZEC to inscribe, drawn from your collection's
-                  balance. Fund it and stamps issue automatically; let it run dry and they queue until you
-                  top it up. Nobody else's coin can spend it, and yours cannot drain anyone else's.
+                <Warning title="Your stamps are already paid for">
+                  Each stamp costs about {STAMP_COST_ZEC} ZEC to inscribe, and your {LAUNCH_FEE_SOL} SOL
+                  covers the first {ALLOWANCE_STAMPS.toLocaleString("en-US")}. Your collection is topped
+                  up automatically — there is no ZEC for you to buy and nothing to fund before your
+                  holders start burning. Past that you can top it up yourself, at the address in the
+                  register. Nobody else's coin can spend your balance, and yours cannot drain anyone
+                  else's.
                 </Warning>
                 <Warning title="Nobody holds your holders' tokens">
                   Burning destroys them on Solana. There is no escrow, no vault and no custody — for you
@@ -243,12 +246,20 @@ function Nav({ route, go }: { route: string; go: (p: string) => void }) {
 
 function Footer() {
   return (
-    <footer className="flex flex-wrap items-baseline justify-between gap-4 px-2 py-8 text-sm text-ink-soft">
+    <footer className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-4 px-2 py-8 text-sm text-ink-soft">
       <p className="max-w-[72ch]">
         ${CONFIG.ticker} takes its name from Zcash Shielded Assets, the protocol feature specified in ZIP
         227. It is an independent project: not affiliated with, endorsed by, or issued by the Zcash
         Foundation or Electric Coin Co., and not the shielded asset the specification describes.
       </p>
+      <a
+        href={SOURCE_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="font-body text-[0.68rem] font-semibold tracking-[0.18em] text-engrave uppercase no-underline hover:underline hover:underline-offset-[6px]"
+      >
+        Source on GitHub
+      </a>
     </footer>
   );
 }

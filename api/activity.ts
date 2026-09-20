@@ -18,7 +18,7 @@
 // filter can never drop a valid burn.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { json, readPumpCreate, rpc } from "./_rpc.ts";
+import { json, readOnchainMetadata, readPumpCreate, rpc } from "./_rpc.ts";
 import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.ts";
 import { normalizeTransaction, resolveKeys } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
@@ -75,7 +75,14 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // oldest first, so the first launch of a mint is the one that counts
     const paid = sigs.filter((s) => !s.err && s.memo?.includes(REQUEST_PREFIX)).reverse();
     for (const s of paid) {
-      const raw = await r.getTransaction(s.signature, "finalized");
+      let raw;
+      try {
+        raw = await r.getTransaction(s.signature, "finalized");
+      } catch {
+        // A launch we could not read this time is missing from the list, not
+        // wrong in it. Better a short leaderboard than no leaderboard.
+        continue;
+      }
       if (!raw) continue;
       const tx = normalizeTransaction(raw, { finalized: true });
       if (!tx.succeeded || tx.memos.length !== 1) continue;
@@ -136,6 +143,10 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       const parsed = (info.value?.data as { parsed?: { info?: { decimals?: number } } } | undefined)?.parsed;
       if (!info.value || typeof parsed?.info?.decimals !== "number") return;
       c.decimals = parsed.info.decimals;
+      if (!c.name) {
+        const meta = await readOnchainMetadata(r, c.mint, parsed.info);
+        if (meta) { c.name = meta.name; if (meta.uri) uris.set(c.mint, meta.uri); }
+      }
       const unit = 10n ** BigInt(c.decimals);
       const cfg: BridgeConfig = {
         solanaMint: c.mint, tokenProgramId: info.value.owner, decimals: c.decimals,

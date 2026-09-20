@@ -36,6 +36,9 @@ export interface SignatureInfo {
  */
 export const DEFAULT_RPC = "https://solana-rpc.publicnode.com";
 
+/** Same endpoint, named for its role when a paid one is primary. */
+export const PUBLIC_RPC_FALLBACK = DEFAULT_RPC;
+
 export class SolanaRpc {
   url: string;
   maxRetries: number;
@@ -106,4 +109,28 @@ export async function readMint(rpc: SolanaRpc, mint: string): Promise<{ tokenPro
     throw new Error(`${mint} is not a token mint`);
   }
   return { tokenProgramId: r.value.owner, decimals: parsed.info.decimals, supply: BigInt(parsed.info.supply ?? "0") };
+}
+
+/**
+ * A primary endpoint with a second one behind it, tried per call.
+ *
+ * A single provider having a bad minute used to end whatever was running: a
+ * 20-minute history scan died at 950,000 signatures on one exhausted retry,
+ * and a page read returned nothing at all. Neither job depends on WHICH
+ * endpoint answers, so a failed call is simply asked again elsewhere.
+ */
+export class FailoverRpc extends SolanaRpc {
+  private readonly backup: SolanaRpc | null;
+  constructor(primary: string, backup: string, maxRetries = 3) {
+    super(primary, maxRetries);
+    this.backup = primary === backup ? null : new SolanaRpc(backup, maxRetries);
+  }
+  override async call<T>(method: string, params: unknown[]): Promise<T> {
+    try {
+      return await super.call<T>(method, params);
+    } catch (e) {
+      if (!this.backup) throw e;
+      return this.backup.call<T>(method, params);
+    }
+  }
 }

@@ -7,11 +7,11 @@
 //
 //   node --experimental-strip-types scripts/export-burns.ts <mint> <SYMBOL> <minWholeTokens>
 
-import { SolanaRpc, readMint } from "../src/solana/rpc.ts";
+import { FailoverRpc, PUBLIC_RPC_FALLBACK, readMint } from "../src/solana/rpc.ts";
 import { normalizeTransaction } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
 import { solanaRpcUrl, describeRpc } from "../src/env.ts";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const OUT = new URL("../api/_history.json", import.meta.url);
 const [mint, symbol, min = "0"] = process.argv.slice(2);
@@ -19,7 +19,7 @@ if (!mint || !symbol) throw new Error("usage: export-burns.ts <mint> <SYMBOL> <m
 
 const url = solanaRpcUrl();
 console.log(`scanning ${symbol} ${mint} via ${describeRpc(url)}`);
-const rpc = new SolanaRpc(url);
+const rpc = new FailoverRpc(url, PUBLIC_RPC_FALLBACK);
 const { tokenProgramId, decimals } = await readMint(rpc, mint);
 const unit = 10n ** BigInt(decimals);
 const cfg = {
@@ -30,18 +30,37 @@ const cfg = {
 
 // 1. list the whole history, keeping only memo-carrying signatures. SPEC 3.8
 //    requires a memo, so this filter cannot drop a valid burn.
-const candidates: { signature: string }[] = [];
-let before: string | undefined;
-let listed = 0;
-for (;;) {
-  const page = await rpc.getSignaturesForAddress(mint, { before, limit: 1000 });
-  listed += page.length;
-  for (const s of page) if (s.memo && !s.err) candidates.push({ signature: s.signature });
-  if (page.length < 1000) break;
-  before = page[page.length - 1].signature;
-  if (listed % 50_000 === 0) console.log(`  ${listed} signatures, ${candidates.length} carry a memo`);
+//
+// Checkpointed, because this is the long part: $STAMP carries 1.28M
+// signatures and the first attempt died at 950,000 on one exhausted retry,
+// throwing away twenty minutes. Progress is written every 50 pages, so a
+// re-run resumes at the last page instead of at the top.
+interface Checkpoint { before?: string; listed: number; candidates: string[]; done?: boolean }
+const CACHE = new URL(`../.cache/burn-scan-${mint}.json`, import.meta.url);
+mkdirSync(new URL("../.cache/", import.meta.url), { recursive: true });
+
+let ck: Checkpoint = { listed: 0, candidates: [] };
+try {
+  ck = JSON.parse(readFileSync(CACHE, "utf8"));
+  console.log(`resuming at ${ck.listed} signatures, ${ck.candidates.length} candidates`);
+} catch { /* first run */ }
+
+const save = () => writeFileSync(CACHE, JSON.stringify(ck));
+let pages = 0;
+while (!ck.done) {
+  const page = await rpc.getSignaturesForAddress(mint, { before: ck.before, limit: 1000 });
+  ck.listed += page.length;
+  for (const s of page) if (s.memo && !s.err) ck.candidates.push(s.signature);
+  if (page.length < 1000) { ck.done = true; break; }
+  ck.before = page[page.length - 1].signature;
+  if (++pages % 50 === 0) {
+    save();
+    console.log(`  ${ck.listed} signatures, ${ck.candidates.length} carry a memo`);
+  }
 }
-console.log(`listed ${listed} signatures; ${candidates.length} carry a memo`);
+save();
+const candidates = ck.candidates.map((signature) => ({ signature }));
+console.log(`listed ${ck.listed} signatures; ${candidates.length} carry a memo`);
 
 // 2. fetch and judge each one by the same rule the bridge uses.
 const burns = [];
