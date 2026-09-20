@@ -27,6 +27,21 @@ export const FEE_ADDRESSES = [
   "mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS",
 ];
 
+/**
+ * The slot the register opens at. Nothing earlier is listed.
+ *
+ * The pad ran briefly before its rules settled -- coins created elsewhere
+ * could be attached to it by paying the fee with a deploy memo, which is not
+ * what the register is for. It now begins here, and everything in it was
+ * created on the pad.
+ *
+ * Only the listing is affected. The register itself lives on Zcash at an
+ * address whose key nobody holds, so an earlier entry is still inscribed,
+ * still verifiable, and still served by the bridge -- it cannot be removed by
+ * anyone, this site included.
+ */
+export const REGISTER_OPENS_AT_SLOT = 448_851_204;
+
 /** $STAMP launched on pump.fun before the pad existed, so it has no deploy
     transaction to be discovered from. It is a collection all the same. */
 export const FLAGSHIP = {

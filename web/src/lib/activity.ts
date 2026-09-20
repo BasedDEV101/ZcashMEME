@@ -18,6 +18,8 @@ export interface ActivityCollection {
   destroyedTokens: string | null;
   marketCapLamports: string | null;
   graduated: boolean;
+  createdHere?: boolean;
+  slot?: number;
 }
 
 export interface ActivityBurn {

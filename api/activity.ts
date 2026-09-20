@@ -23,7 +23,7 @@ import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.t
 import { normalizeTransaction, resolveKeys, type RpcTransaction } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
 import type { BridgeConfig } from "../src/core/types.ts";
-import { FEE_ADDRESSES, LAUNCH_FEE_LAMPORTS, MIN_ACCEPTED_FEE_LAMPORTS, FLAGSHIP } from "./_launchpad.ts";
+import { FEE_ADDRESSES, LAUNCH_FEE_LAMPORTS, MIN_ACCEPTED_FEE_LAMPORTS, REGISTER_OPENS_AT_SLOT, FLAGSHIP } from "./_launchpad.ts";
 import history from "./_history.json" with { type: "json" };
 
 const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
@@ -61,6 +61,12 @@ export interface Collection {
   /** Raw supply and owning program, read from chain; pricing needs both. */
   supplyRaw: string | null;
   tokenProgramId: string | null;
+  /** True when this coin's mint was created by the same transaction that
+      registered it -- i.e. it was launched here, not attached afterwards. */
+  createdHere: boolean;
+  /** The slot it was registered at, so the register's opening can be applied
+      to entries seeded from a previous reading too. */
+  slot: number;
 }
 
 /** How long a rebuild's answer stands before another one is worth doing. */
@@ -99,8 +105,13 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // pass; the ones already seeded are untouched, so the list only ever
     // grows and the next rebuild picks up what this one missed.
     let partial = false;
+    const eligible = (c: Collection) =>
+      c.mint === FLAGSHIP.mint || (c.createdHere === true && (c.slot ?? 0) >= REGISTER_OPENS_AT_SLOT);
+
     for (const prior of (Array.isArray(cached?.collections) ? cached.collections : []) as Collection[]) {
-      if (!prior?.mint) continue;
+      // A reading taken before the register opened can carry entries it no
+      // longer admits; they are dropped here rather than inherited forever.
+      if (!prior?.mint || !eligible(prior)) continue;
       collections.set(prior.mint, {
         ...prior,
         // Counted fresh below from the burns actually seen this pass.
@@ -114,7 +125,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       launchedAt: FLAGSHIP.launchedAt, launchedBy: null, decimals: 6,
       burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
       destroyedTokens: null, marketCapLamports: null, graduated: false,
-      supplyRaw: null, tokenProgramId: null,
+      supplyRaw: null, tokenProgramId: null, createdHere: true, slot: 0,
     });
 
     // Listing can fail part way and that is survivable: the collections are
@@ -186,11 +197,21 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       // transaction, so they are what the coin actually launched with. A coin
       // registered after launching elsewhere has none, and shows its ticker.
       let name: string | null = null;
+      let createdHere = false;
       for (const ix of raw.transaction.message.instructions ?? []) {
         if (keys[ix.programIdIndex] !== PUMP) continue;
         const meta = readPumpCreate(decodeBase58(ix.data));
-        if (meta && meta.symbol.toUpperCase() === req.symbol) { name = meta.name; uris.set(req.mint, meta.uri); }
+        if (meta && meta.symbol.toUpperCase() === req.symbol) {
+          name = meta.name;
+          uris.set(req.mint, meta.uri);
+          createdHere = true;
+        }
       }
+
+      // Only coins created by the transaction that registered them. Paying the
+      // fee with a memo naming somebody else's mint attaches a coin the pad
+      // never launched, which is not what the register is for.
+      if (!createdHere || tx.slot < REGISTER_OPENS_AT_SLOT) continue;
 
       // Supply minted by the create itself. Used only to skip scanning a coin
       // whose supply has never moved -- a burn always reduces supply, so
@@ -205,6 +226,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         minWholeTokens: req.minWholeTokens.toString(), signature: tx.signature,
         initialSupply: minted > 0n ? minted.toString() : null,
         launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
+        createdHere, slot: tx.slot,
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
         destroyedTokens: null, marketCapLamports: null, graduated: false,
         supplyRaw: null, tokenProgramId: null,
@@ -375,7 +397,11 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // a 46-coin one. The count is checked against the previous snapshot too,
     // as a backstop for any other way of losing coins: the pad only grows, so
     // a shorter list is a worse one.
-    const previous = Array.isArray(cached?.collections) ? cached.collections.length : 0;
+    // Compared against what the PREVIOUS reading would list under today's
+    // rules, not its raw length: otherwise tightening the rules looks like
+    // data loss and blocks every save from then on.
+    const previous = (Array.isArray(cached?.collections) ? (cached.collections as Collection[]) : [])
+      .filter((c) => c?.mint && eligible(c)).length;
     if (mintsRead && ranked.length >= previous && ranked.length > 0) await saveSnapshot(body);
     return json(res, 200, body, 120);
   } catch (e) {

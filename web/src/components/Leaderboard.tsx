@@ -1,23 +1,25 @@
 import { useState } from "react";
 import { GuillocheBand } from "./Guilloche.tsx";
-import { SOLSCAN, sol, tokens, when, type ActivityCollection } from "../lib/activity.ts";
+import { SearchField } from "./Field.tsx";
+import { SOLSCAN, short, sol, tokens, when, type ActivityCollection } from "../lib/activity.ts";
 
 type Sort = "burns" | "marketCap" | "destroyed" | "newest";
 
 const SORTS: { key: Sort; label: string; blurb: string }[] = [
   { key: "burns", label: "Burns", blurb: "ranked by tokens destroyed for a certificate" },
-  { key: "marketCap", label: "Market cap", blurb: "ranked by bonding-curve market cap" },
+  { key: "marketCap", label: "Market cap", blurb: "ranked by market cap" },
   { key: "destroyed", label: "Supply gone", blurb: "ranked by every token destroyed, certificate or not" },
   { key: "newest", label: "Newest", blurb: "most recently launched first" },
 ];
+
+/** Rows shown before asking. The register runs to hundreds; the screen does not. */
+const PAGE = 20;
 
 const big = (v: string | null): bigint => (v === null ? -1n : BigInt(v));
 
 function order(a: ActivityCollection, b: ActivityCollection, by: Sort): number {
   switch (by) {
     case "marketCap": {
-      // A graduated coin has no curve price, so it sorts below priced coins
-      // rather than being given a number we would have had to invent.
       const d = big(b.marketCapLamports) - big(a.marketCapLamports);
       return d === 0n ? 0 : d > 0n ? 1 : -1;
     }
@@ -34,18 +36,41 @@ function order(a: ActivityCollection, b: ActivityCollection, by: Sort): number {
   }
 }
 
+/** Ticker, name and mint all match, so a pasted contract address finds its coin. */
+function matches(c: ActivityCollection, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    c.symbol.toLowerCase().includes(q) ||
+    (c.name ?? "").toLowerCase().includes(q) ||
+    c.mint.toLowerCase().includes(q)
+  );
+}
+
 /**
  * Every coin on the pad, ranked however you ask.
  *
- * Burns is the default because it is the one thing this pad does that a
- * market cap cannot tell you: a coin nobody burns has no certificates behind
- * it however it trades.
+ * Burns is the default because it is the one thing this pad does that a market
+ * cap cannot tell you: a coin nobody burns has no certificates behind it
+ * however it trades.
+ *
+ * Only the first twenty are printed. The register runs to hundreds of coins,
+ * and a page that prints all of them is one nobody reads to the end of — the
+ * search field is how you reach a specific coin, not scrolling.
  */
 export function Leaderboard({ collections, loading, error, stale }: {
   collections: ActivityCollection[]; loading: boolean; error: string | null; stale?: boolean;
 }) {
   const [by, setBy] = useState<Sort>("burns");
-  const ranked = [...collections].sort((a, b) => order(a, b, by));
+  const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState(false);
+
+  const found = collections.filter((c) => matches(c, query));
+  const ranked = [...found].sort((a, b) => order(a, b, by));
+  // A search shows everything it found: hiding matches behind "show more"
+  // makes the field feel broken.
+  const searching = query.trim().length > 0;
+  const shown = searching || expanded ? ranked : ranked.slice(0, PAGE);
   const blurb = SORTS.find((s) => s.key === by)!.blurb;
 
   return (
@@ -58,80 +83,57 @@ export function Leaderboard({ collections, loading, error, stale }: {
         <GuillocheBand className="h-5 w-full" />
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2">
-        {SORTS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setBy(s.key)}
-            aria-pressed={by === s.key}
-            className={`font-body text-[0.66rem] font-semibold tracking-[0.16em] uppercase transition-colors ${
-              by === s.key ? "text-engrave underline underline-offset-[6px]" : "text-ink-soft hover:text-engrave"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div className="mt-7 flex flex-col gap-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-8">
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {SORTS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setBy(s.key)}
+              aria-pressed={by === s.key}
+              className={`font-body text-[0.66rem] font-semibold tracking-[0.16em] uppercase transition-colors ${
+                by === s.key ? "text-engrave underline underline-offset-[6px]" : "text-ink-soft hover:text-engrave"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="w-full sm:max-w-[22rem]">
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            label="Search coins by name, ticker or contract address"
+            placeholder="Name, ticker or contract"
+            count={searching ? `${found.length}` : undefined}
+          />
+        </div>
       </div>
 
       {error ? (
         <Note>Could not read the chains just now — {error}. Nothing is lost; reload in a moment.</Note>
       ) : loading ? (
         <Note>Reading both chains…</Note>
-      ) : ranked.length === 0 ? (
+      ) : collections.length === 0 ? (
         <Note>No coins on the pad yet. The first one launched is the first one listed.</Note>
+      ) : shown.length === 0 ? (
+        <Note>Nothing matches “{query.trim()}”. Try a ticker, a name, or a full contract address.</Note>
       ) : (
-        <ol className="mt-7 space-y-px">
-          {ranked.map((c, i) => (
-            <li
-              key={c.mint}
-              className="grid grid-cols-[2.5rem_2.75rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3 border-b border-engrave/12 py-4 sm:grid-cols-[2.5rem_3.25rem_minmax(0,1fr)_auto]"
-            >
-              <span className="tnum self-start pt-1 font-display text-[1.35rem] leading-none text-engrave/55">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-
-              {c.image ? (
-                <img
-                  src={c.image}
-                  alt=""
-                  className="h-11 w-11 self-start rounded-full border border-engrave/25 object-cover sm:h-13 sm:w-13"
-                />
-              ) : (
-                <span className="flex h-11 w-11 items-center justify-center self-start rounded-full border border-engrave/25 font-display text-sm text-engrave/70 sm:h-13 sm:w-13">
-                  {c.symbol.slice(0, 2)}
-                </span>
-              )}
-
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-baseline gap-x-2.5">
-                  <span className="font-display text-lg leading-tight text-ink">{c.symbol}</span>
-                  {c.name && <span className="truncate text-[0.88rem] text-ink-soft">{c.name}</span>}
-                </div>
-                <a
-                  href={`${SOLSCAN}/token/${c.mint}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="tnum font-data text-[0.68rem] break-all text-ink-soft no-underline hover:text-engrave hover:underline"
-                >
-                  {c.mint}
-                </a>
-                <p className="mt-1 font-data text-[0.68rem] text-ink-soft">
-                  {secondary(c, by)}
-                </p>
-              </div>
-
-              <div className="col-span-3 text-left sm:col-span-1 sm:pl-6 sm:text-right">
-                <p className="tnum font-display text-[1.3rem] leading-none text-engrave">
-                  {headline(c, by)}
-                </p>
-                <p className="mt-1 font-body text-[0.6rem] tracking-[0.16em] text-ink-soft uppercase">
-                  {caption(c, by)}
-                </p>
-              </div>
-            </li>
+        <ol className="mt-7">
+          {shown.map((c, i) => (
+            <Row key={c.mint} collection={c} rank={searching ? null : i + 1} by={by} />
           ))}
         </ol>
+      )}
+
+      {!searching && !expanded && ranked.length > PAGE && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-6 font-body text-[0.68rem] font-semibold tracking-[0.18em] text-engrave uppercase underline underline-offset-[6px] transition-colors hover:text-stamp-deep"
+        >
+          All {ranked.length} coins
+        </button>
       )}
 
       {stale && (
@@ -143,11 +145,54 @@ export function Leaderboard({ collections, loading, error, stale }: {
       <p className="mt-6 max-w-[66ch] text-sm text-ink-soft">
         Burns count only what passed the same rule the bridge uses — a real, finalised burn of that mint,
         above its minimum, with one memo naming a Zcash address. Supply gone counts every token destroyed,
-        including burns that earned nothing. Market cap is read from wherever the coin actually trades — its bonding
-        curve, or its pump.fun pool once it is on one — and is blank when there is no honest price to
-        read.
+        including burns that earned nothing. Market cap is read from wherever the coin actually trades.
       </p>
     </section>
+  );
+}
+
+function Row({ collection: c, rank, by }: { collection: ActivityCollection; rank: number | null; by: Sort }) {
+  return (
+    <li className="grid grid-cols-[2rem_2.5rem_minmax(0,1fr)_auto] items-center gap-x-4 border-b border-engrave/12 py-3.5 first:border-t first:border-engrave/25">
+      <span className="tnum font-display text-[1.05rem] leading-none text-engrave/50">
+        {rank === null ? "" : String(rank).padStart(2, "0")}
+      </span>
+
+      {c.image ? (
+        <img src={c.image} alt="" loading="lazy" className="h-10 w-10 border border-engrave/25 object-cover" />
+      ) : (
+        <span className="flex h-10 w-10 items-center justify-center border border-engrave/25 font-display text-[0.8rem] text-engrave/55">
+          {c.symbol.slice(0, 2)}
+        </span>
+      )}
+
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline gap-x-2.5">
+          <a
+            href={`${SOLSCAN}/token/${c.mint}`}
+            target="_blank"
+            rel="noreferrer"
+            className="font-display text-[1.05rem] leading-tight text-ink no-underline transition-colors hover:text-engrave hover:underline hover:underline-offset-4"
+          >
+            {c.symbol}
+          </a>
+          {c.name && <span className="truncate text-[0.85rem] text-ink-soft">{c.name}</span>}
+        </div>
+        <p className="tnum mt-0.5 font-data text-[0.66rem] text-ink-soft">
+          {short(c.mint, 5)}
+          {c.launchedAt && <> · {when(c.launchedAt)}</>}
+          {c.burners > 0 && <> · {c.burners} burning</>}
+          {c.refusedCount > 0 && <> · {c.refusedCount} refused</>}
+        </p>
+      </div>
+
+      <div className="text-right">
+        <p className="tnum font-display text-[1.15rem] leading-none text-engrave">{headline(c, by)}</p>
+        <p className="mt-1 font-body text-[0.58rem] tracking-[0.14em] text-ink-soft uppercase">
+          {caption(c, by)}
+        </p>
+      </div>
+    </li>
   );
 }
 
@@ -162,22 +207,7 @@ function caption(c: ActivityCollection, by: Sort): string {
   if (by === "marketCap") return "market cap";
   if (by === "destroyed") return "supply destroyed";
   if (by === "newest") return "launched";
-  return `destroyed · ${c.burnCount} ${c.burnCount === 1 ? "certificate" : "certificates"}`;
-}
-
-function secondary(c: ActivityCollection, by: Sort): string {
-  const bits: string[] = [];
-  if (by !== "burns") {
-    bits.push(`${tokens(c.burnedTokens)} burned · ${c.burnCount} ${c.burnCount === 1 ? "certificate" : "certificates"}`);
-  } else {
-    bits.push(`${c.burners} ${c.burners === 1 ? "holder has" : "holders have"} burned`);
-    const cap = sol(c.marketCapLamports);
-    if (cap) bits.push(cap);
-  }
-  bits.push(`minimum ${tokens(c.minWholeTokens)}`);
-  if (by !== "newest" && c.launchedAt) bits.push(`launched ${when(c.launchedAt)}`);
-  if (c.refusedCount > 0) bits.push(`${c.refusedCount} refused`);
-  return bits.join(" · ");
+  return c.burnCount === 1 ? "burned · 1 certificate" : `burned · ${c.burnCount} certificates`;
 }
 
 function Note({ children }: { children: React.ReactNode }) {

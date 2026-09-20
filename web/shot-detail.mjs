@@ -1,0 +1,10 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, deviceScaleFactor: 2 });
+await page.goto(`${process.argv[2]}/leaderboard`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(4000);
+await page.screenshot({ path: "shots/detail-top.png" });
+await page.evaluate(() => window.scrollTo(0, 900));
+await page.waitForTimeout(500);
+await page.screenshot({ path: "shots/detail-rows.png" });
+await browser.close();

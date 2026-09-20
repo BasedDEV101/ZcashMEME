@@ -46,4 +46,7 @@ export const PROOF = {
     the implementation of them is readable. */
 export const SOURCE_URL = "https://github.com/BasedDEV101/ZcashMEME";
 
+/** Where the project posts. */
+export const X_URL = "https://x.com/Zip227";
+
 export const formatTokens = (n: bigint): string => n.toLocaleString("en-US");

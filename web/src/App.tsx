@@ -3,7 +3,7 @@ import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react
 import { Certificate } from "./components/Certificate.tsx";
 import { BurnPanel } from "./components/BurnPanel.tsx";
 import { Guilloche, GuillocheBand } from "./components/Guilloche.tsx";
-import { CONFIG, PROOF, SOURCE_URL, formatTokens } from "./lib/config.ts";
+import { CONFIG, PROOF, SOURCE_URL, X_URL, formatTokens } from "./lib/config.ts";
 import { CreateCoinPanel } from "./components/CreateCoinPanel.tsx";
 import { Registry } from "./components/Registry.tsx";
 import { ALLOWANCE_STAMPS, CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
@@ -70,9 +70,10 @@ function Page() {
               <GuillocheBand className="h-5 w-full" />
             </div>
             <p className="mt-7 max-w-[64ch] text-[0.98rem] leading-relaxed text-ink-soft">
-              Every coin launched here, and every burn against one. Both are read from Solana on each
-              load, not from a list we keep — so this page can be wrong about presentation, never about
-              what happened.
+              Every coin launched here since the register opened, and every burn against one. Both are
+              read from Solana, not from a list we keep — so this page can be wrong about presentation,
+              never about what happened. A coin created somewhere else and attached afterwards is not
+              listed; everything here was made on the pad.
             </p>
           </section>
           <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={9} />
@@ -264,6 +265,14 @@ function Nav({ route, go }: { route: string; go: (p: string) => void }) {
           {label}
         </button>
       ))}
+      <a
+        href={X_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="font-body text-[0.68rem] font-semibold tracking-[0.18em] text-ink-soft uppercase no-underline transition-colors hover:text-engrave"
+      >
+        Follow
+      </a>
     </nav>
   );
 }
@@ -276,14 +285,24 @@ function Footer() {
         227. It is an independent project: not affiliated with, endorsed by, or issued by the Zcash
         Foundation or Electric Coin Co., and not the shielded asset the specification describes.
       </p>
-      <a
-        href={SOURCE_URL}
-        target="_blank"
-        rel="noreferrer"
-        className="font-body text-[0.68rem] font-semibold tracking-[0.18em] text-engrave uppercase no-underline hover:underline hover:underline-offset-[6px]"
-      >
-        Source on GitHub
-      </a>
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <a
+          href={X_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="font-body text-[0.68rem] font-semibold tracking-[0.18em] text-engrave uppercase no-underline hover:underline hover:underline-offset-[6px]"
+        >
+          @Zip227
+        </a>
+        <a
+          href={SOURCE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="font-body text-[0.68rem] font-semibold tracking-[0.18em] text-engrave uppercase no-underline hover:underline hover:underline-offset-[6px]"
+        >
+          Source on GitHub
+        </a>
+      </div>
     </footer>
   );
 }
