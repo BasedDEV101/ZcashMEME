@@ -1,7 +1,7 @@
 // Zcash transparent keys, addresses and signing.
 //
 // Keys live only in git-ignored files with 0600 permissions and are never
-// logged or committed (CLAUDE.md). Only addresses and public keys are printed.
+// logged or committed. Only addresses and public keys are printed.
 
 import * as secp from "@noble/secp256k1";
 import { hmac } from "@noble/hashes/hmac";

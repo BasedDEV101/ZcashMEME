@@ -1,6 +1,6 @@
 // Local keypair handling for devnet/testnet scripts.
 //
-// CLAUDE.md: keys live only in git-ignored files with 0600 permissions, and
+// Project rule: keys live only in git-ignored files with 0600 permissions, and
 // are never logged, echoed or committed. Only the public key is ever printed.
 
 import { Keypair } from "@solana/web3.js";
