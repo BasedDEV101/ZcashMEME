@@ -50,6 +50,15 @@ both chains and anyone can check the arithmetic.
 
 Users arrive from Solana, likely from a pump.fun link or a post on X, frequently on a phone.
 
+## Wallets — standing rules
+
+- **Never use the wallet that launched $STAMP** (`26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA`).
+  Operator instruction, 2026-09-20: it is not to be used for anything, ever. It holds the launch
+  supply. Its key was exposed in chat and should be treated as compromised.
+- **Launches and tests use** `mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS`.
+- Fee-paying and minting wallets created by this project live in `keys/` (git-ignored, 0600) and are
+  listed in docs/RUNBOOK.md.
+
 ## Capabilities and Constraints
 
 - **Burns are irreversible.** A wrong amount, a wrong address or a wrong token cannot be undone or

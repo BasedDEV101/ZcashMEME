@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/selftest.ts","./src/components/burnpanel.tsx","./src/components/certificate.tsx","./src/components/guilloche.tsx","./src/lib/config.ts","./vite.config.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/selftest.ts","./src/components/burnpanel.tsx","./src/components/certificate.tsx","./src/components/guilloche.tsx","./src/components/launchpanel.tsx","./src/components/registry.tsx","./src/lib/config.ts","./src/lib/launchpad.ts","./vite.config.ts"],"version":"5.9.3"}

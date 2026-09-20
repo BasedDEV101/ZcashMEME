@@ -1,9 +1,12 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { Certificate } from "./components/Certificate.tsx";
 import { BurnPanel } from "./components/BurnPanel.tsx";
 import { Guilloche, GuillocheBand } from "./components/Guilloche.tsx";
 import { CONFIG, PROOF, formatTokens } from "./lib/config.ts";
+import { LaunchPanel } from "./components/LaunchPanel.tsx";
+import { Registry } from "./components/Registry.tsx";
+import { LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
 
 export default function App() {
   const wallets = useMemo(() => [], []);
@@ -17,9 +20,84 @@ export default function App() {
 }
 
 function Page() {
+  // The register lives on Zcash; the browser cannot speak lightwalletd's gRPC,
+  // so the site reads a snapshot the operator exports from chain.
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [updated, setUpdated] = useState<string | null>(null);
+  const [route, setRoute] = useState(() => (typeof location !== "undefined" ? location.pathname : "/"));
+
+  useEffect(() => {
+    fetch("/collections.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) { setCollections(d.collections ?? []); setUpdated(d.updated ?? null); } })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => setRoute(location.pathname);
+    addEventListener("popstate", onPop);
+    return () => removeEventListener("popstate", onPop);
+  }, []);
+
+  const go = (path: string) => {
+    history.pushState({}, "", path);
+    setRoute(path);
+    scrollTo({ top: 0 });
+  };
+
+  if (route.startsWith("/launch")) {
+    return (
+      <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
+        <main className="mx-auto w-full max-w-5xl space-y-6">
+          <Nav route={route} go={go} />
+          <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
+            <h1 className="font-display text-[1.9rem] leading-none text-engrave sm:text-[2.4rem]">
+              Register a collection
+            </h1>
+            <div className="mt-5 text-engrave">
+              <GuillocheBand className="h-5 w-full" />
+            </div>
+            <p className="mt-7 max-w-[64ch] text-[0.98rem] leading-relaxed text-ink-soft">
+              Any Solana token can have stamps. Register it here and its holders can burn and receive a
+              certificate on Zcash, cut with the exact amount they destroyed — the same mechanism{" "}
+              {CONFIG.ticker} uses, with no special treatment for ours.
+            </p>
+            <div className="mt-8 grid gap-10 lg:grid-cols-[1.15fr_1fr]">
+              <LaunchPanel collections={collections} />
+              <aside className="space-y-6 border-t border-engrave/20 pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+                <h3 className="font-display text-xl text-engrave">How it works</h3>
+                <Warning title={`${LAUNCH_FEE_SOL} SOL to register`}>
+                  Pays for your collection's record to be inscribed on Zcash mainnet, permanently. One
+                  mint can only be registered once, and the first registration wins.
+                </Warning>
+                <Warning title="Your collection pays for its own stamps">
+                  Each stamp costs about {STAMP_COST_ZEC} ZEC to inscribe, drawn from your collection's
+                  balance. Fund it and stamps issue automatically; let it run dry and they queue until you
+                  top it up. Nobody else's coin can spend it, and yours cannot drain anyone else's.
+                </Warning>
+                <Warning title="Nobody holds your holders' tokens">
+                  Burning destroys them on Solana. There is no escrow, no vault and no custody — for you
+                  or for us.
+                </Warning>
+                <Warning title="It is not private yet">
+                  Zcash cannot hold shielded assets today. Stamps are public inscriptions, and convert
+                  when shielded assets activate. Do not promise your holders otherwise.
+                </Warning>
+              </aside>
+            </div>
+          </section>
+
+          <Registry collections={collections} updated={updated} />
+          <Footer />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
       <main className="mx-auto w-full max-w-5xl space-y-6">
+        <Nav route={route} go={go} />
         <Certificate
           serial="000001"
           amount={formatTokens(BigInt(PROOF.mainnetAmount))}
@@ -84,16 +162,41 @@ function Page() {
         <WhyAStamp />
 
         <Proof />
-
-        <footer className="flex flex-wrap items-baseline justify-between gap-4 px-2 py-8 text-sm text-ink-soft">
-          <p>
-            ${CONFIG.ticker} takes its name from Zcash Shielded Assets, the protocol feature specified in
-            ZIP 227. It is an independent project: not affiliated with, endorsed by, or issued by the
-            Zcash Foundation or Electric Coin Co., and not the shielded asset the specification describes.
-          </p>
-        </footer>
+        <Footer />
       </main>
     </div>
+  );
+}
+
+function Nav({ route, go }: { route: string; go: (p: string) => void }) {
+  const here = route.startsWith("/launch") ? "/launch" : "/";
+  return (
+    <nav className="flex items-baseline gap-6 px-2">
+      {[["/", "Burn"], ["/launch", "Register a collection"]].map(([path, label]) => (
+        <button
+          key={path}
+          type="button"
+          onClick={() => go(path)}
+          className={`font-body text-[0.68rem] font-semibold tracking-[0.18em] uppercase transition-colors ${
+            here === path ? "text-engrave underline underline-offset-[6px]" : "text-ink-soft hover:text-engrave"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="flex flex-wrap items-baseline justify-between gap-4 px-2 py-8 text-sm text-ink-soft">
+      <p className="max-w-[72ch]">
+        ${CONFIG.ticker} takes its name from Zcash Shielded Assets, the protocol feature specified in ZIP
+        227. It is an independent project: not affiliated with, endorsed by, or issued by the Zcash
+        Foundation or Electric Coin Co., and not the shielded asset the specification describes.
+      </p>
+    </footer>
   );
 }
 

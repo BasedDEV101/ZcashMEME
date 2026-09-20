@@ -1,0 +1,18 @@
+{
+  "updated": "2026-09-20T20:38:37.336Z",
+  "network": "main",
+  "collections": [
+    {
+      "sym": "STAMP",
+      "mint": "EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc",
+      "dec": 6,
+      "min": "1000000000000",
+      "from": 448811893,
+      "inscriptionId": "cccead86dd768ebee24af0793529ba383246cce8e00852776008be374ad45a68i0",
+      "height": 3490325,
+      "funding": "t1XXm8A7Yo1wF4RXFnLhd8yUccX7ke1hfJ5",
+      "fundedZat": "0",
+      "stamps": 0
+    }
+  ]
+}
