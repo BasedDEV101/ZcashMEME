@@ -29,3 +29,6 @@ bridge: EKtmPPLaCbEEKiwoHHtV7TsRsmPXs5CMGtQtZFSiinsc (mainnet) -> t1P2GcxGhzeM5t
 [watch] burn 2ywa1j5F… rejected: transaction failed
 [watch] 0 valid, 13 rejected
 [ledger] 1 NFTs, 0 unclaimed, 0 rejected, 0 unresolved
+[watch] burn 57zuNFGZ… rejected: transaction failed
+[watch] 0 valid, 1 rejected
+[ledger] 1 NFTs, 0 unclaimed, 0 rejected, 0 unresolved

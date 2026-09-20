@@ -24,6 +24,20 @@ export const OPERATOR_ADDRESS = "mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS";
  * not by taking their name off it.
  */
 export const CREATOR_FEE_BPS = 200;
+
+/**
+ * The address lookup table every launch is compiled against.
+ *
+ * A launch touches 18 accounts that never change -- the pump programs and
+ * their PDAs, the token and memo programs, WSOL, the operator address. At 32
+ * bytes each they pushed the transaction to 1422 bytes against Solana's 1232
+ * limit, which is why the launch briefly needed two signatures. Through the
+ * table they cost a byte each, and it fits in one again.
+ *
+ * Created once by scripts/create-lookup-table.ts; its contents are derived,
+ * not listed by hand. Replacing it means re-running that script.
+ */
+export const LOOKUP_TABLE = "3zEFdQiMCRF5ew9KuLkeT4XVnRSRJjv58HWv8LSxvzJP";
 export const CREATOR_FEE_PERCENT = CREATOR_FEE_BPS / 100;
 
 /** Roughly what one stamp costs the collection's funding balance, in ZEC. */

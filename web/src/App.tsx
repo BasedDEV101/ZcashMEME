@@ -105,11 +105,10 @@ function Page() {
               <CreateCoinPanel />
               <aside className="space-y-6 border-t border-engrave/20 pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
                 <h3 className="font-display text-xl text-engrave">How it works</h3>
-                <Warning title="Two signatures, in order">
-                  The first creates the coin on pump.fun. The second routes its creator fee, pays the
-                  {" "}{LAUNCH_FEE_SOL} SOL launch fee and registers its collection — all together, so a
-                  coin cannot be listed here without its fee routed. Stop after the first and you have an
-                  ordinary pump.fun coin, unregistered, having paid us nothing.
+                <Warning title="One signature does everything">
+                  It creates the coin on pump.fun, routes its creator fee, pays the {LAUNCH_FEE_SOL} SOL
+                  launch fee and registers its collection. You cannot end up with a coin and no
+                  collection, or a paid fee and no coin.
                 </Warning>
                 <Warning title="The coin is yours; the creator fee is the pad's">
                   You create it from your own wallet and you are its creator on pump.fun. It carries a

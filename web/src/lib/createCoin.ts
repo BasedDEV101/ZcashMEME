@@ -1,10 +1,13 @@
-import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import {
+  Keypair, PublicKey, SystemProgram, TransactionInstruction,
+  TransactionMessage, VersionedTransaction, type Connection,
+} from "@solana/web3.js";
 import { PumpSdk } from "@pump-fun/pump-sdk";
 import { encodeDeployRequest } from "@protocol/core/deploy-request.ts";
 import { MEMO_V3 } from "@protocol/solana/programs.ts";
 import { assertNotForbidden } from "@protocol/core/forbidden.ts";
 import BN from "bn.js";
-import { CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, OPERATOR_ADDRESS } from "./launchpad.ts";
+import { CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, LOOKUP_TABLE, OPERATOR_ADDRESS } from "./launchpad.ts";
 
 export interface CoinDetails {
   name: string;
@@ -41,31 +44,29 @@ export async function uploadMetadata(file: File, d: CoinDetails): Promise<Upload
 }
 
 export interface BuiltLaunch {
-  /** Creates the coin on pump.fun, with its 2% creator fee set. */
-  create: Transaction;
-  /** Points that fee at the pad, pays the launch fee, and asks for the
-      collection — together, so a coin cannot be registered here without its
-      fee being routed. */
-  register: Transaction;
+  /** The whole launch, in one signature. */
+  transaction: VersionedTransaction;
   mint: Keypair;
 }
 
 /**
- * The launch, in two signatures.
+ * One transaction that does the whole launch:
+ *   1. create the coin on pump.fun, with its creator fee set
+ *   2. point that fee at the pad
+ *   3. pay the launch fee
+ *   4. request its collection, as a memo the operator's watcher reads
  *
- * It was one, until the fee-sharing instructions pushed it past Solana's
- * 1232-byte limit -- 1370 bytes with everything in one, and still 1268 with
- * the create alone once a 32-character name and a 10-character ticker were
- * used, which is what the form allows.
+ * One signature, so a launcher cannot end up with a coin whose fee is not
+ * routed, a collection with no coin, or a paid fee and no coin.
  *
- * So the create stands alone, and everything else rides together: pointing
- * the creator fee at the pad, paying the launch fee, and asking for the
- * collection. Those three are the ones that must not come apart -- a coin
- * cannot end up on this register without its fee routed, because the same
- * signature does both. A launcher who stops after the first signature has an
- * ordinary pump.fun coin, no collection, and has paid us nothing.
+ * It is a versioned transaction because a legacy one cannot hold it: spelled
+ * out in full these instructions come to 1422 bytes against a 1232-byte
+ * limit. The 18 accounts that are the same for every launch are referenced
+ * through a lookup table instead, at a byte each.
  */
-export async function buildLaunch(payer: PublicKey, uri: string, d: CoinDetails): Promise<BuiltLaunch> {
+export async function buildLaunch(
+  payer: PublicKey, uri: string, d: CoinDetails, conn: Connection,
+): Promise<BuiltLaunch> {
   assertNotForbidden(payer.toBase58(), "a coin launch");
   const mint = Keypair.generate();
   const sdk = new PumpSdk();
@@ -118,9 +119,19 @@ export async function buildLaunch(payer: PublicKey, uri: string, d: CoinDetails)
     ) as unknown as Buffer,
   });
 
-  return {
-    create: new Transaction().add(create),
-    register: new Transaction().add(sharingConfig, shares, fee, register),
-    mint,
-  };
+  const lookup = await conn.getAddressLookupTable(new PublicKey(LOOKUP_TABLE));
+  if (!lookup.value) throw new Error("The launch lookup table could not be read. Try again in a moment.");
+
+  const { blockhash } = await conn.getLatestBlockhash("finalized");
+  const message = new TransactionMessage({
+    payerKey: payer,
+    recentBlockhash: blockhash,
+    instructions: [create, sharingConfig, shares, fee, register],
+  }).compileToV0Message([lookup.value]);
+
+  const transaction = new VersionedTransaction(message);
+  // The mint is a fresh keypair and must sign its own creation. Signing here
+  // leaves the wallet's slot empty for the wallet to fill.
+  transaction.sign([mint]);
+  return { transaction, mint };
 }

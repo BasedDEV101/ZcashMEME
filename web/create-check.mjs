@@ -1,6 +1,13 @@
 import { chromium } from "playwright";
 import { MOCK } from "./mock-wallet.mjs";
-import { Transaction, VersionedTransaction } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
+
+// A v0 transaction keeps most of its accounts in a lookup table, so the
+// message alone cannot say which account an instruction points at. Resolve the
+// table to check the fee really goes where it should.
+const LOOKUP_TABLE = "3zEFdQiMCRF5ew9KuLkeT4XVnRSRJjv58HWv8LSxvzJP";
+const rpcConn = new Connection("https://solana-rpc.publicnode.com", "confirmed");
+const table = (await rpcConn.getAddressLookupTable(new PublicKey(LOOKUP_TABLE))).value;
 const URL = process.argv[2];
 const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 const MEMO = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
@@ -61,7 +68,16 @@ for (const [n, cap] of captured.entries()) {
   console.log(`   --- tx ${n + 1}: ${raw.length} bytes (limit 1232) ---`);
   let msg;
   try { msg = VersionedTransaction.deserialize(raw).message; } catch { msg = Transaction.from(raw).compileMessage(); }
-  const keys = (msg.staticAccountKeys ?? msg.accountKeys).map((k) => k.toBase58());
+  // Full key order for a v0 message: static keys, then writable lookups, then
+  // readonly ones. Same order the runtime resolves them in.
+  const lookups = msg.addressTableLookups ?? [];
+  const fromTable = (indexes) => (table ? indexes.map((i) => table.state.addresses[i].toBase58()) : []);
+  const keys = [
+    ...(msg.staticAccountKeys ?? msg.accountKeys).map((k) => k.toBase58()),
+    ...lookups.flatMap((l) => fromTable(l.writableIndexes)),
+    ...lookups.flatMap((l) => fromTable(l.readonlyIndexes)),
+  ];
+  console.log(`   accounts          : ${(msg.staticAccountKeys ?? msg.accountKeys).length} inline + ${keys.length - (msg.staticAccountKeys ?? msg.accountKeys).length} from the lookup table`);
   for (const ix of (msg.compiledInstructions ?? msg.instructions)) {
     const prog = keys[ix.programIdIndex];
     const data = Uint8Array.from(ix.data);
