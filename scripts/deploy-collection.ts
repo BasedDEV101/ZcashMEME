@@ -30,11 +30,31 @@ if (!mint || !symbol) throw new Error("usage: --mint <solana mint> --symbol <TIC
 const rpc = new SolanaRpc(process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com");
 const onChain = await readMint(rpc, mint);
 const minWhole = BigInt(args.get("min") ?? "1000000");
+
+// The slot burns count from. Pass --from to skip the lookup; otherwise walk
+// back to the mint's first signature. That walk is cheap for a new token and
+// expensive for one already trading, which is exactly why the value is
+// recorded once at deploy instead of rediscovered on every pass.
+let from = Number(args.get("from") ?? 0);
+if (!from) {
+  process.stdout.write("finding the mint's first slot… ");
+  let before: string | undefined, oldest;
+  for (let i = 0; i < 60; i++) {
+    const page = await rpc.getSignaturesForAddress(mint, { before, limit: 1000 });
+    if (page.length === 0) break;
+    oldest = page[page.length - 1];
+    if (page.length < 1000) break;
+    before = oldest.signature;
+  }
+  from = oldest?.slot ?? 0;
+  console.log(from);
+}
 const content: CollectionContent = {
-  p: protocol, op: "deploy", v: 1,
+  p: protocol, op: "deploy", v: 2,
   mint, sym: symbol.toUpperCase(),
   dec: onChain.decimals,
   min: minWhole * 10n ** BigInt(onChain.decimals),
+  from,
   by: loadOrCreateKey(process.env.ZCASH_KEY ?? `keys/zcash-${network}net.hex`).key.address(network),
 };
 
@@ -46,6 +66,7 @@ console.log(`collection   ${content.sym}  (${mint})`);
 console.log(`token program ${onChain.tokenProgramId}`);
 console.log(`decimals      ${content.dec}   supply ${(onChain.supply / 10n ** BigInt(content.dec)).toLocaleString("en-US")}`);
 console.log(`minimum burn  ${minWhole.toLocaleString("en-US")} tokens`);
+console.log(`burns from     slot ${from}`);
 console.log(`registry      ${registryAddress(network)}`);
 console.log(`funding       ${fundingAddressFor(key, mint, network)}   <- the launcher funds this`);
 

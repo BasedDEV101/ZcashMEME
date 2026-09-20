@@ -4,8 +4,8 @@ import { buildRegistry, encodeCollectionBytes, parseCollection, type CollectionC
 import { MINT, ALICE_Z, BOB_Z, fake32, taddr } from "./fixtures.ts";
 
 const C: CollectionContent = {
-  p: "zsam", op: "deploy", v: 1,
-  mint: MINT, sym: "STAMP", dec: 6, min: 1_000_000_000_000n, by: ALICE_Z,
+  p: "zsam", op: "deploy", v: 2,
+  mint: MINT, sym: "STAMP", dec: 6, min: 1_000_000_000_000n, from: 448811893, by: ALICE_Z,
 };
 const enc = (s: string) => new TextEncoder().encode(s);
 let n = 0;
@@ -22,6 +22,7 @@ test("rejects non-canonical and malformed records", () => {
   const s = new TextDecoder().decode(encodeCollectionBytes(C));
   for (const v of [
     s.replace('"dec":6', '"dec": 6'),
+    s.replace('"from":448811893', '"from":"448811893"'),
     s.replace("}", ',"x":1}'),
     s.replace('"min":"1000000000000"', '"min":1000000000000'),
     s.replace('"sym":"STAMP"', '"sym":"STAMP!"'),

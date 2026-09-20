@@ -27,7 +27,7 @@ export const OP_DEPLOY = "deploy";
  * can remove an entry.
  */
 export const REGISTRY_PHRASE = "zsam registry v1 -- deploy records only, no key exists";
-export const VERSION = 1;
+export const VERSION = 2;
 
 export interface CollectionContent {
   p: string;
@@ -37,6 +37,7 @@ export interface CollectionContent {
   sym: string;      // ticker, 1-10 chars, as displayed
   dec: number;      // mint decimals, must match chain
   min: bigint;      // minimum burn in raw base units
+  from: number;     // Solana slot burns count from (normally the mint's first slot)
   by: string;       // deployer's Zcash transparent address
 }
 
@@ -44,7 +45,7 @@ export function encodeCollection(c: CollectionContent): string {
   return (
     `{"p":${JSON.stringify(c.p)},"op":"${OP_DEPLOY}","v":${VERSION},` +
     `"mint":${JSON.stringify(c.mint)},"sym":${JSON.stringify(c.sym)},` +
-    `"dec":${c.dec},"min":"${c.min.toString()}","by":${JSON.stringify(c.by)}}`
+    `"dec":${c.dec},"min":"${c.min.toString()}","from":${c.from},"by":${JSON.stringify(c.by)}}`
   );
 }
 
@@ -71,19 +72,22 @@ export function parseCollection(bytes: Uint8Array, protocol: string): Collection
   }
   if (typeof obj !== "object" || obj === null || Array.isArray(obj)) return null;
   const o = obj as Record<string, unknown>;
-  const want = ["p", "op", "v", "mint", "sym", "dec", "min", "by"];
+  const want = ["p", "op", "v", "mint", "sym", "dec", "min", "from", "by"];
   const keys = Object.keys(o);
   if (keys.length !== want.length || !want.every((k) => keys.includes(k))) return null;
   if (o.p !== protocol || o.op !== OP_DEPLOY || o.v !== VERSION) return null;
   if (typeof o.mint !== "string" || typeof o.sym !== "string" || typeof o.by !== "string") return null;
   if (typeof o.dec !== "number" || !Number.isInteger(o.dec) || o.dec < 0 || o.dec > 18) return null;
   if (typeof o.min !== "string" || !DECIMAL.test(o.min)) return null;
+  // Without a start slot a watcher must page a token's entire history, which
+  // is tens of thousands of signatures for anything that trades.
+  if (typeof o.from !== "number" || !Number.isInteger(o.from) || o.from < 0) return null;
   if (!SYMBOL.test(o.sym)) return null;
   if (!parseTransparentAddress(o.by)) return null;
 
   const c: CollectionContent = {
     p: o.p, op: OP_DEPLOY, v: VERSION,
-    mint: o.mint, sym: o.sym, dec: o.dec, min: BigInt(o.min), by: o.by,
+    mint: o.mint, sym: o.sym, dec: o.dec, min: BigInt(o.min), from: o.from, by: o.by,
   };
   if (encodeCollection(c) !== text) return null;
   return c;

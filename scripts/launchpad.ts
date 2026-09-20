@@ -58,7 +58,7 @@ for (let pass = 1; ; pass++) {
         tokenProgramId: onChain.tokenProgramId,
         decimals: onChain.decimals,
         minBurnRaw: c.min,
-        startSlot: 0,
+        startSlot: c.from,
         zcashNetwork: network,
         protocol,
       };

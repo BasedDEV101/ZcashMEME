@@ -67,7 +67,11 @@ export async function watchPass(
       }
       throw e;
     }
-    const stop = page.findIndex((s) => s.slot <= lastSlot && !useUntil);
+    // Always stop at the collection's start slot, not only in the fallback
+    // path: a traded token accumulates tens of thousands of signatures, and
+    // paging to genesis on every fresh store makes the first pass unusable.
+    const floor = Math.max(useUntil ? 0 : lastSlot, cfg.startSlot - 1);
+    const stop = page.findIndex((s) => s.slot <= floor);
     fresh.push(...(stop >= 0 ? page.slice(0, stop) : page));
     if (stop >= 0 || page.length < pageSize) break;
     before = page[page.length - 1].signature;
