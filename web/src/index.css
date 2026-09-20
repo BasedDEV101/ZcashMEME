@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+/* Faces chosen as objects from the document world: a didone for engraved
+   numerals, a workhorse grotesque for the body, a typewriter face for serials
+   and machine data. Self-hosted, not CDN. */
+@import "@fontsource/bodoni-moda/400.css";
+@import "@fontsource/bodoni-moda/600.css";
+@import "@fontsource/bodoni-moda/400-italic.css";
+@import "@fontsource/libre-franklin/400.css";
+@import "@fontsource/libre-franklin/500.css";
+@import "@fontsource/libre-franklin/600.css";
+@import "@fontsource/courier-prime/400.css";
+@import "@fontsource/courier-prime/700.css";
+
+@theme {
+  --color-paper: #f2ede1;
+  --color-paper-deep: #e7dfcd;
+  --color-paper-edge: #d9cfb8;
+  --color-ink: #2a2724;
+  --color-ink-soft: #5d574c;
+  --color-engrave: #1b3a2f;
+  --color-engrave-soft: #3d6353;
+  --color-stamp: #d8455f;
+  --color-stamp-deep: #a32b42;
+
+  --font-display: "Bodoni Moda", "Didot", "Times New Roman", serif;
+  --font-body: "Libre Franklin", system-ui, sans-serif;
+  --font-data: "Courier Prime", ui-monospace, monospace;
+}
+
+/* The scene: a document read in daylight, on a phone, by someone about to
+   destroy something of theirs. Paper, not a screen pretending to be one. */
+html {
+  background-color: var(--color-paper-deep);
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-paper-deep);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Browser surfaces belong to the design, not to the browser. */
+::selection {
+  background-color: color-mix(in srgb, var(--color-stamp) 28%, transparent);
+  color: var(--color-ink);
+}
+:root {
+  caret-color: var(--color-stamp);
+  accent-color: var(--color-engrave);
+  scrollbar-color: var(--color-engrave-soft) var(--color-paper-deep);
+  scrollbar-width: thin;
+}
+:focus-visible {
+  outline: 2px solid var(--color-engrave);
+  outline-offset: 3px;
+  border-radius: 1px;
+}
+a {
+  color: var(--color-engrave);
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+/* Serials, amounts and addresses are measurements: figures must line up. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Document parts -------------------------------------------------------- */
+
+/* A ruled field, as on a form: the line belongs to the paper, not a border. */
+.field-rule {
+  background-image: linear-gradient(to top, color-mix(in srgb, var(--color-engrave) 38%, transparent) 1px, transparent 1px);
+}
+
+/* The perforation between a certificate and its counterfoil. */
+.perforation {
+  background-image: radial-gradient(circle at center, var(--color-paper-deep) 0 2.4px, transparent 2.6px);
+  background-size: 11px 11px;
+  background-repeat: repeat-y;
+  background-position: center top;
+}
+@media (max-width: 899px) {
+  .perforation {
+    background-repeat: repeat-x;
+    background-position: left center;
+  }
+}
+
+/* Paper has weight: an offset and a real blur, never a coloured halo. */
+.paper-lift {
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--color-paper-edge) 90%, transparent),
+    0 18px 38px -22px color-mix(in srgb, var(--color-ink) 55%, transparent),
+    0 2px 6px -3px color-mix(in srgb, var(--color-ink) 22%, transparent);
+}
+
+/* A rubber stamp sits slightly off-angle, ink uneven, never crisp. */
+.stamped {
+  color: var(--color-stamp-deep);
+  border: 2.5px solid currentColor;
+  opacity: 0.86;
+  mix-blend-mode: multiply;
+  letter-spacing: 0.14em;
+}
+
+/* The one authored moment: the cancellation lands like a struck stamp. */
+@keyframes strike {
+  from {
+    opacity: 0;
+    transform: rotate(-9deg) scale(1.55);
+  }
+  to {
+    opacity: 0.9;
+    transform: rotate(-5.5deg) scale(1);
+  }
+}
+.strike-in {
+  animation: strike 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .strike-in {
+    animation-duration: 1ms;
+  }
+}

@@ -50,7 +50,8 @@ export function buildBurnInstructions(r: BurnRequest): TransactionInstruction[] 
     new TransactionInstruction({
       keys: [{ pubkey: owner, isSigner: true, isWritable: false }],
       programId: new PublicKey(MEMO_V3),
-      data: Buffer.from(r.zcashAddress, "utf8"),
+      // TextEncoder, not Buffer: this runs in the browser as well as Node.
+      data: new TextEncoder().encode(r.zcashAddress) as unknown as Buffer,
     }),
   ];
 }

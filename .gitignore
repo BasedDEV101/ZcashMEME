@@ -33,3 +33,9 @@ keys/
 # local runtime state
 state-*.db*
 config/localnet.json
+
+# local toolchain and shots
+.pw-browsers/
+shots/
+dist/
+node_modules/
