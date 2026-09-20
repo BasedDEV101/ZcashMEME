@@ -42,6 +42,21 @@ for (const [name, viewport] of [
   errors.slice(0, 3).forEach((e) => { failures++; console.log(`   ! ${e.slice(0, 150)}`); });
   await page.close();
 }
+// Cross-runtime determinism: the bundle must derive the same addresses the
+// Node tests assert. A version drift between the two would send a user's
+// stamp to an address their recovery phrase does not control.
+{
+  const page = await browser.newPage();
+  await page.goto("http://100.86.39.78:4173/selftest.html", { waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  const out = await page.locator("#out").innerText();
+  const ok = out.includes("SELFTEST OK");
+  if (!ok) failures++;
+  console.log(`derivation selftest: ${ok ? "OK" : "FAILED"}`);
+  if (!ok) console.log(out);
+  await page.close();
+}
+
 await browser.close();
 console.log(failures === 0 ? "BROWSER CHECK PASSED" : `BROWSER CHECK FAILED (${failures})`);
 process.exit(failures === 0 ? 0 : 1);
