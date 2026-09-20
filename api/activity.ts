@@ -18,7 +18,7 @@
 // filter can never drop a valid burn.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { decodeBase58, inParallel, json, lamportsTransferredTo, loadSnapshot, readCurves, readOnchainMetadata, readPumpCreate, rpc, saveSnapshot } from "./_rpc.ts";
+import { decodeBase58, inParallel, json, lamportsTransferredTo, loadSnapshot, readCurves, readMints, readOnchainMetadata, readPumpCreate, rpc, saveSnapshot } from "./_rpc.ts";
 import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.ts";
 import { normalizeTransaction, resolveKeys, type RpcTransaction } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
@@ -169,6 +169,9 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     const rows = new Map<string, Burn>();
     for (const b of (history as { burns: Burn[] }).burns) rows.set(b.signature, b);
 
+    // Every mint in one call, before anything else needs them.
+    const mintInfo = await readMints(r, [...collections.keys()]);
+
     let fetched = 0;
     // Newest collections first. The flagship has 1.28M signatures and its
     // history already lives in the snapshot, so it must not spend the whole
@@ -189,29 +192,29 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       r: ReturnType<typeof rpc>, c: Collection, rows: Map<string, Burn>,
       getFetched: () => number, setFetched: (n: number) => void,
     ): Promise<void> {
-      const info = await r.getAccountInfo(c.mint);
-      const parsed = (info.value?.data as { parsed?: { info?: { decimals?: number; supply?: string } } } | undefined)?.parsed;
-      if (!info.value || typeof parsed?.info?.decimals !== "number") return;
-      c.decimals = parsed.info.decimals;
-      c.tokenProgramId = info.value.owner;
-      if (typeof parsed.info.supply === "string") c.supplyRaw = parsed.info.supply;
+      // Read in one batch before the scans start, not per coin.
+      const info = mintInfo.get(c.mint);
+      if (!info) return;
+      c.decimals = info.decimals;
+      c.tokenProgramId = info.owner;
+      c.supplyRaw = info.supply;
 
       // Nothing has been burned, so there is nothing to find: skip the scan.
       // Listing a pump.fun mint's signatures is the expensive part of this
       // request -- fourteen of them in sequence took 114 seconds -- and most
       // coins on the pad have never had a single token destroyed.
-      if (c.initialSupply && typeof parsed.info.supply === "string") {
-        const gone = BigInt(c.initialSupply) - BigInt(parsed.info.supply);
+      if (c.initialSupply) {
+        const gone = BigInt(c.initialSupply) - BigInt(info.supply);
         c.destroyedTokens = (gone > 0n ? gone / 10n ** BigInt(c.decimals) : 0n).toString();
       }
-      if (c.initialSupply && parsed.info.supply === c.initialSupply) return;
+      if (c.initialSupply && info.supply === c.initialSupply) return;
       if (!c.name) {
-        const meta = await readOnchainMetadata(r, c.mint, parsed.info);
+        const meta = await readOnchainMetadata(r, c.mint, info);
         if (meta) { c.name = meta.name; if (meta.uri) uris.set(c.mint, meta.uri); }
       }
       const unit = 10n ** BigInt(c.decimals);
       const cfg: BridgeConfig = {
-        solanaMint: c.mint, tokenProgramId: info.value.owner, decimals: c.decimals,
+        solanaMint: c.mint, tokenProgramId: info.owner, decimals: c.decimals,
         minBurnRaw: BigInt(c.minWholeTokens) * unit, startSlot: 0,
         zcashNetwork: "main", protocol: "zsam",
       };

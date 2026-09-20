@@ -333,3 +333,29 @@ export async function readCurves(
   });
   return out;
 }
+
+/** What a mint account says about itself, for many mints in one call. */
+export interface MintInfo { decimals: number; supply: string; owner: string; extensions?: unknown }
+
+/**
+ * Read many mints at once.
+ *
+ * One getAccountInfo per coin cost 57 calls on a 57-coin pad and exhausted
+ * the RPC quota before the request reached anything else -- market caps came
+ * back empty with a 429 behind them. getMultipleAccounts answers the same
+ * question in one call per hundred coins.
+ */
+export async function readMints(r: SolanaRpc, mints: string[]): Promise<Map<string, MintInfo>> {
+  const out = new Map<string, MintInfo>();
+  for (let i = 0; i < mints.length; i += 100) {
+    const slice = mints.slice(i, i + 100);
+    const res = await r.call<{ value: ({ owner: string; data: unknown } | null)[] }>(
+      "getMultipleAccounts", [slice, { encoding: "jsonParsed", commitment: "finalized" }]);
+    res.value.forEach((acc, j) => {
+      const parsed = (acc?.data as { parsed?: { type?: string; info?: MintInfo } } | undefined)?.parsed;
+      if (!acc || parsed?.type !== "mint" || typeof parsed.info?.decimals !== "number") return;
+      out.set(slice[j], { ...parsed.info, owner: acc.owner });
+    });
+  }
+  return out;
+}
