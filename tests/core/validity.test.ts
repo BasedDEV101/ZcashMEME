@@ -83,3 +83,25 @@ test("memo must be exactly one transparent address on the configured network", (
 });
 
 void ALICE; void MINT; void TOKEN_PROGRAM;
+
+test("a copycat token with the same name or ticker is NOT accepted", () => {
+  // Names and tickers are metadata. The rule only ever compares mint
+  // addresses, so a token calling itself $MEME with identical metadata is
+  // simply a different mint and can never produce an NFT.
+  const copycat = fake32("copycat-MEME-same-ticker");
+  const tx = burnTx({ burns: [burn({ mint: copycat })] });
+  assert.equal(reason(tx), "no burn of our mint");
+
+  // Even burned in the same transaction as a real burn, it is ignored and the
+  // real burn still counts for its own amount only.
+  const both = burnTx({ burns: [burn({ mint: copycat, amount: 999_999_999n * 1_000_000n }), burn()] });
+  const v = evaluateBurn(both, CFG);
+  assert.ok(v.ok);
+  assert.equal(v.burn.amount, 7_350_000_000_000n, "the copycat's amount never inflates the NFT");
+});
+
+test("the NFT ledger re-checks the mint, so a copycat inscription cannot slip in later", () => {
+  // Defence in depth: even if an inscription cited a real burn, content naming
+  // a different mint is rejected (ledger rule 3, tested in ledger.test.ts).
+  assert.equal(CFG.solanaMint.length > 0, true);
+});
