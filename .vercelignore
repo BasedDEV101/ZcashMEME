@@ -1,0 +1,25 @@
+# Only the app and the protocol modules it imports need to reach the build.
+
+# local toolchain and runtime state
+.tools/
+web/.pw-browsers/
+web/shots/
+state-*.db*
+config/localnet.json
+config/mainnet-smoke.json
+
+# secrets, never uploaded anywhere
+keys/
+.env
+.env.*
+!.env.example
+
+# local agent tooling and research
+.claude/
+.impeccable/
+logs/
+
+# build output and deps (Vercel builds its own)
+node_modules/
+web/node_modules/
+web/dist/
