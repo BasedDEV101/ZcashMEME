@@ -191,20 +191,22 @@ function Row({ collection: c, rank, by, first }: {
   collection: ActivityCollection; rank: number | null; by: Sort; first?: boolean;
 }) {
   return (
-    <li className="grid grid-cols-[2rem_2.5rem_minmax(0,1fr)_auto] items-center gap-x-4 border-b border-engrave/12 py-3.5 first:border-t first:border-engrave/25">
-      <span className="tnum font-display text-[1.05rem] leading-none text-engrave/50">
+    // Flex, not a fixed grid: at 390px a four-column grid squeezed the middle
+    // until names truncated to "Zcash…" and the meta line wrapped four deep.
+    <li className="flex items-center gap-3 border-b border-engrave/12 py-3.5 first:border-t first:border-engrave/25 sm:gap-4">
+      <span className="tnum w-6 shrink-0 font-display text-[1.05rem] leading-none text-engrave/50 sm:w-8">
         {rank === null ? "" : String(rank).padStart(2, "0")}
       </span>
 
       {c.image ? (
-        <img src={c.image} alt="" loading="lazy" className="h-10 w-10 border border-engrave/25 object-cover" />
+        <img src={c.image} alt="" loading="lazy" className="h-10 w-10 shrink-0 border border-engrave/25 object-cover" />
       ) : (
-        <span className="flex h-10 w-10 items-center justify-center border border-engrave/25 font-display text-[0.8rem] text-engrave/55">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-engrave/25 font-display text-[0.8rem] text-engrave/55">
           {c.symbol.slice(0, 2)}
         </span>
       )}
 
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2.5">
           <a
             href={`${SOLSCAN}/token/${c.mint}`}
@@ -221,17 +223,22 @@ function Row({ collection: c, rank, by, first }: {
             </span>
           )}
         </div>
-        <p className="tnum mt-0.5 font-data text-[0.66rem] text-ink-soft">
-          {short(c.mint, 5)}
-          {c.launchedAt && by !== "newest" && by !== "oldest" && <> · {when(c.launchedAt)}</>}
+        <p className="tnum mt-0.5 truncate font-data text-[0.66rem] text-ink-soft">
+          {/* The address is the first thing to go when space is short: it is
+              the least readable part of the row and the ticker already links
+              to it. */}
+          <span className="hidden sm:inline">{short(c.mint, 5)} · </span>
+          {c.launchedAt && when(c.launchedAt)}
           {c.burners > 0 && <> · {c.burners} burning</>}
           {c.refusedCount > 0 && <> · {c.refusedCount} refused</>}
         </p>
       </div>
 
-      <div className="text-right">
-        <p className="tnum font-display text-[1.15rem] leading-none text-engrave">{headline(c, by)}</p>
-        <p className="mt-1 font-body text-[0.58rem] tracking-[0.14em] text-ink-soft uppercase">
+      <div className="shrink-0 text-right">
+        <p className="tnum font-display text-[1.05rem] leading-none text-engrave sm:text-[1.15rem]">
+          {headline(c, by)}
+        </p>
+        <p className="mt-1 font-body text-[0.55rem] tracking-[0.12em] text-ink-soft uppercase sm:text-[0.58rem] sm:tracking-[0.14em]">
           {caption(c, by)}
         </p>
       </div>
@@ -250,7 +257,7 @@ function caption(c: ActivityCollection, by: Sort): string {
   if (by === "marketCap") return "market cap";
   if (by === "destroyed") return "supply destroyed";
   if (by === "newest" || by === "oldest") return "launched";
-  return c.burnCount === 1 ? "burned · 1 certificate" : `burned · ${c.burnCount} certificates`;
+  return c.burnCount === 1 ? "burned · 1 cert" : `burned · ${c.burnCount} certs`;
 }
 
 function Note({ children }: { children: React.ReactNode }) {
