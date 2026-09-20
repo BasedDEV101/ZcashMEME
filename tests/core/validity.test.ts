@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { evaluateBurn } from "../../src/core/validity.ts";
 import { burn, burnTx, CFG, ALICE, ALICE_Z, MINT, TOKEN_PROGRAM, fake32, taddr } from "./fixtures.ts";
 import { INCINERATOR, SYSTEM_PROGRAM } from "../../src/solana/programs.ts";
+import { assertNotForbidden, STAMP_LAUNCH_WALLET } from "../../src/core/forbidden.ts";
 
 const reason = (tx: Parameters<typeof evaluateBurn>[0]) => {
   const v = evaluateBurn(tx, CFG);
@@ -104,4 +105,11 @@ test("the NFT ledger re-checks the mint, so a copycat inscription cannot slip in
   // Defence in depth: even if an inscription cited a real burn, content naming
   // a different mint is rejected (ledger rule 3, tested in ledger.test.ts).
   assert.equal(CFG.solanaMint.length > 0, true);
+});
+
+test("the $STAMP launch wallet is refused in code, not just in a document", () => {
+  // Operator instruction: that wallet is never used for anything. A rule in a
+  // README is a rule someone forgets; this one throws.
+  assert.throws(() => assertNotForbidden(STAMP_LAUNCH_WALLET, "a burn"), /must never be used/);
+  assert.doesNotThrow(() => assertNotForbidden("mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS"));
 });

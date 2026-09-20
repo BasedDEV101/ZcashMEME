@@ -1,13 +1,14 @@
 import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import { encodeDeployRequest } from "@protocol/core/deploy-request.ts";
 import { MEMO_V3 } from "@protocol/solana/programs.ts";
+import { assertNotForbidden } from "@protocol/core/forbidden.ts";
 
 /** What it costs to register a collection, and who receives it. */
 export const LAUNCH_FEE_SOL = 0.5;
 export const LAUNCH_FEE_LAMPORTS = BigInt(Math.round(LAUNCH_FEE_SOL * 1e9));
 
 /** Fees land here. Change this to move launch revenue to a different wallet. */
-export const OPERATOR_ADDRESS = "CkYBWStJkXMDM1XqyBTukYHxivjDmhBv8A7i1wcMgj3o";
+export const OPERATOR_ADDRESS = "mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS";
 
 /** Roughly what one stamp costs the collection's funding balance, in ZEC. */
 export const STAMP_COST_ZEC = 0.00030546;
@@ -33,6 +34,8 @@ export interface Collection {
  * public and checkable rather than an email nobody else can audit.
  */
 export function buildDeployRequest(payer: string, mint: string, symbol: string, minWholeTokens: bigint): TransactionInstruction[] {
+  assertNotForbidden(payer, "a collection registration");
+  assertNotForbidden(OPERATOR_ADDRESS, "receiving launch fees");
   const from = new PublicKey(payer);
   return [
     SystemProgram.transfer({

@@ -8,6 +8,7 @@ import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { createBurnCheckedInstruction } from "@solana/spl-token";
 import { MEMO_V3 } from "./programs.ts";
 import { parseTransparentAddress } from "../core/zcash-address.ts";
+import { assertNotForbidden } from "../core/forbidden.ts";
 
 export interface BurnRequest {
   mint: string;
@@ -23,6 +24,7 @@ export interface BurnRequest {
 
 /** Throws with a message fit to show a user if the request could not be a valid burn. */
 export function checkBurnRequest(r: BurnRequest): void {
+  assertNotForbidden(r.owner, "a burn");
   const addr = parseTransparentAddress(r.zcashAddress);
   if (!addr) throw new Error("That is not a Zcash transparent address. It should start with t1 or t3.");
   if (addr.network !== r.zcashNetwork) {
