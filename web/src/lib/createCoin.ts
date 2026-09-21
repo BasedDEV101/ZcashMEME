@@ -7,10 +7,7 @@ import { encodeDeployRequest } from "@protocol/core/deploy-request.ts";
 import { MEMO_V3 } from "@protocol/solana/programs.ts";
 import { assertNotForbidden } from "@protocol/core/forbidden.ts";
 import BN from "bn.js";
-import {
-  CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, LOOKUP_TABLE, OPERATOR_ADDRESS,
-  QUOTE_MINT, QUOTE_TOKEN_PROGRAM,
-} from "./launchpad.ts";
+import { CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, LOOKUP_TABLE, OPERATOR_ADDRESS } from "./launchpad.ts";
 
 export interface CoinDetails {
   name: string;
@@ -85,10 +82,11 @@ export async function buildLaunch(
     creator: payer,
     user: payer,
     creatorFeeBps: new BN(CREATOR_FEE_BPS),
-    // Quoted in ZEC, not SOL. A pad whose whole subject is Zcash quoting its
-    // coins in somebody else's currency is a detail people notice.
-    quoteMint: new PublicKey(QUOTE_MINT),
-    quoteTokenProgram: new PublicKey(QUOTE_TOKEN_PROGRAM),
+    // ZEC pairing is OFF. create_v2 accepts the ZEC quote happily -- that part
+    // simulates clean -- but updateFeeSharesV2 then fails the whole
+    // transaction with InvalidAccountData out of DistributeCreatorFeesV2, so
+    // no coin gets created at all. Shipped and reverted 2026-09-21; see
+    // QUOTE_MINT for what still needs solving before it can go back on.
     // Never on. Mayhem doubles the supply to 2B and lets pump's agent burn
     // tokens on its own -- burns nobody authorised, which would mint stamps
     // and wreck the collection's accounting.
@@ -107,15 +105,11 @@ export async function buildLaunch(
   // because the config's authority is the coin's creator, which is them.
   const operator = new PublicKey(OPERATOR_ADDRESS);
   const sharingConfig = await sdk.createFeeSharingConfig({ creator: payer, mint: mint.publicKey, pool: null });
-  // v1 handles SOL-quoted coins only; a ZEC-quoted one needs v2, which moves
-  // its pending fees through the right quote ATAs.
-  const shares = await sdk.updateFeeSharesV2({
+  const shares = await sdk.updateFeeShares({
     authority: payer,
     mint: mint.publicKey,
     currentShareholders: [payer],
     newShareholders: [{ address: operator, shareBps: 10_000 }],
-    quoteMint: new PublicKey(QUOTE_MINT),
-    quoteTokenProgram: new PublicKey(QUOTE_TOKEN_PROGRAM),
   });
 
   const register = new TransactionInstruction({
