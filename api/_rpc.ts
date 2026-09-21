@@ -39,14 +39,15 @@ export function json(res: { statusCode: number; setHeader(k: string, v: string):
 }
 
 /**
- * Read the first three strings of a pump.fun create instruction: name, symbol,
- * uri. Borsh puts each behind a u32 length, after the 8-byte discriminator.
+ * Read the first three strings of a launch create instruction: name, symbol,
+ * uri. Pump and Meteora DBC both Borsh-encode this metadata as three strings,
+ * each behind a u32 length and after the 8-byte instruction discriminator.
  *
  * Only the leading three fields are read, so a later change to the argument
  * list cannot shift them. The caller checks the symbol against the memo, so a
  * misparse is caught rather than displayed.
  */
-export function readPumpCreate(data: Uint8Array): { name: string; symbol: string; uri: string } | null {
+export function readLaunchMetadata(data: Uint8Array): { name: string; symbol: string; uri: string } | null {
   let i = 8;
   const out: string[] = [];
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);

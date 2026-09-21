@@ -6,6 +6,7 @@ import {
 } from "../lib/activity.ts";
 import { CONFIG } from "../lib/config.ts";
 import { useTokenDetails, type TokenDetail } from "../lib/tokenDetails.ts";
+import { LaunchPlatformPill } from "./LaunchPlatformPill.tsx";
 
 type Sort = "marketCap" | "volume" | "holders" | "newest" | "oldest";
 
@@ -264,6 +265,7 @@ function LeaderboardRow({ collection: c, rank, rates, first, detail }: {
           >
             {c.symbol}
           </a>
+          <LaunchPlatformPill platform={c.launchPlatform} />
           {first && (
                   <span className="rounded-full bg-engrave/10 px-2 py-0.5 text-[0.58rem] font-semibold tracking-[0.08em] text-engrave uppercase">
               First entry

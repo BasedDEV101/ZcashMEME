@@ -1,5 +1,6 @@
 import { GuillocheBand } from "./Guilloche.tsx";
-import { SOLSCAN, short, toBigInt, tokens, when, type ActivityBurn } from "../lib/activity.ts";
+import { SOLSCAN, short, toBigInt, tokens, when, type ActivityBurn, type ActivityCollection } from "../lib/activity.ts";
+import { LaunchPlatformPill } from "./LaunchPlatformPill.tsx";
 
 /**
  * Every burn against a collection on the pad, refusals included.
@@ -8,13 +9,15 @@ import { SOLSCAN, short, toBigInt, tokens, when, type ActivityBurn } from "../li
  * rule is the clearest possible statement of what the rule is, and hiding them
  * would make the feed look like a promise instead of a record.
  */
-export function Burns({ burns, loading, error, stale, limit, onMore }: {
+export function Burns({ burns, collections = [], loading, error, stale, limit, onMore }: {
   burns: ActivityBurn[]; loading: boolean; error: string | null; stale?: boolean;
+  collections?: ActivityCollection[];
   limit?: number; onMore?: () => void;
 }) {
   const shown = limit ? burns.slice(0, limit) : burns;
   const valid = burns.filter((b) => b.ok);
   const destroyed = valid.reduce((n, b) => n + (toBigInt(b.amount) ?? 0n), 0n);
+  const platformByMint = new Map(collections.map((coin) => [coin.mint, coin.launchPlatform]));
 
   return (
     <section id="burns" className="paper-lift scroll-mt-6 bg-paper px-6 py-9 sm:px-10 sm:py-12">
@@ -58,7 +61,12 @@ export function Burns({ burns, loading, error, stale, limit, onMore }: {
                   <td className="tnum py-3.5 pr-6 font-data text-[0.75rem] whitespace-nowrap text-ink-soft">
                     {when(b.blockTime)}
                   </td>
-                  <td className="py-3.5 pr-6 font-display text-base whitespace-nowrap text-ink">{b.symbol}</td>
+                  <td className="py-3.5 pr-6 whitespace-nowrap text-ink">
+                    <span className="flex items-center gap-2">
+                      <span className="font-display text-base">{b.symbol}</span>
+                      <LaunchPlatformPill platform={platformByMint.get(b.mint)} />
+                    </span>
+                  </td>
                   <td className="tnum py-3.5 pr-6 font-data text-sm whitespace-nowrap text-ink">
                     {b.amount ? tokens(b.amount) : "—"}
                   </td>

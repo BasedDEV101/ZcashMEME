@@ -1,7 +1,15 @@
 import { marketCap, money, tokens, when, type ActivityCollection, type Rates } from "../lib/activity.ts";
 import { useTokenDetails, type TokenDetail } from "../lib/tokenDetails.ts";
+import { LaunchPlatformPill } from "./LaunchPlatformPill.tsx";
 
 const PUMP = "https://pump.fun/coin";
+const DEX = "https://dexscreener.com/solana";
+
+function launchDestination(collection: ActivityCollection): string {
+  return collection.launchPlatform === "meteora"
+    ? `${DEX}/${collection.dexPairAddress ?? collection.mint}`
+    : `${PUMP}/${collection.mint}`;
+}
 
 /**
  * The most recent coins on the pad, newest first.
@@ -58,12 +66,13 @@ export function LatestCoins({ collections, loading, error, limit = 8, onMore, ra
             {newest.map((c) => (
               <li key={c.mint} className="group">
                 <a
-                  href={`${PUMP}/${c.mint}`}
+                  href={launchDestination(c)}
                   target="_blank"
                   rel="noreferrer"
+                  title={c.launchPlatform === "meteora" ? "Open on DexScreener" : "Open on Pump"}
                   className="block no-underline"
                 >
-                  <Plate collection={c} />
+                  <Plate collection={c} image={c.image ?? details[c.mint]?.image ?? null} />
                   <div className="mt-3 flex items-baseline justify-between gap-2">
                     <span className="truncate font-display text-[1.15rem] leading-none text-ink transition-colors group-hover:text-engrave">
                       {c.symbol}
@@ -102,24 +111,26 @@ export function LatestCoins({ collections, loading, error, limit = 8, onMore, ra
  * is the social-app convention for a person, and these are objects printed on
  * a document.
  */
-function Plate({ collection }: { collection: ActivityCollection }) {
-  if (collection.image) {
+function Plate({ collection, image }: { collection: ActivityCollection; image: string | null }) {
+  if (image) {
     return (
       <div className="relative aspect-square w-full overflow-hidden border border-engrave/30 bg-paper-deep">
         <img
-          src={collection.image}
+          src={image}
           alt=""
           loading="lazy"
           className="h-full w-full object-cover transition-[filter,transform] duration-500 ease-out group-hover:scale-[1.03]"
         />
+        <LaunchPlatformPill platform={collection.launchPlatform} className="absolute top-2 left-2" />
       </div>
     );
   }
   return (
-    <div className="flex aspect-square w-full items-center justify-center border border-engrave/30 bg-paper-deep">
+    <div className="relative flex aspect-square w-full items-center justify-center border border-engrave/30 bg-paper-deep">
       <span className="font-display text-[1.6rem] text-engrave/45">
         {String(collection.symbol ?? "?").slice(0, 3)}
       </span>
+      <LaunchPlatformPill platform={collection.launchPlatform} className="absolute top-2 left-2" />
     </div>
   );
 }

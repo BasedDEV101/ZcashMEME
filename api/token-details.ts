@@ -85,7 +85,41 @@ async function readOne(mint: string, full: boolean): Promise<TokenDetail> {
       }).catch(() => undefined)
     : Promise.resolve();
 
-  await Promise.all([holderRequest, metadataRequest]);
+  // Meteora coins do not exist in Pump's metadata service. DexScreener reads
+  // the same public token metadata and gives the card an equivalent image and
+  // social treatment once the pair is indexed. Pump data remains preferred.
+  const dexRequest = full
+    ? fetch(`https://api.dexscreener.com/tokens/v1/solana/${mint}`, {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(6000),
+      }).then(async (res) => {
+        if (!res.ok) return;
+        const pairs = (await res.json()) as {
+          pairCreatedAt?: number | null;
+          liquidity?: { usd?: number | null };
+          info?: {
+            imageUrl?: string | null;
+            websites?: { url?: string | null }[];
+            socials?: { type?: string | null; url?: string | null }[];
+          };
+        }[];
+        const pair = pairs
+          .filter((item) => item?.info)
+          .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
+        if (!pair) return;
+        image ??= httpsUrl(pair.info?.imageUrl);
+        website ??= httpsUrl(pair.info?.websites?.[0]?.url);
+        for (const social of pair.info?.socials ?? []) {
+          if (social.type === "twitter") twitter ??= httpsUrl(social.url);
+          if (social.type === "telegram") telegram ??= httpsUrl(social.url);
+        }
+        if (createdAt === null && typeof pair.pairCreatedAt === "number") {
+          createdAt = Math.floor(pair.pairCreatedAt / 1000);
+        }
+      }).catch(() => undefined)
+    : Promise.resolve();
+
+  await Promise.all([holderRequest, metadataRequest, dexRequest]);
   const detail = { mint, holders, description, image, website, twitter, telegram, createdAt };
   cache.set(`${full ? "full" : "holders"}:${mint}`, { at: Date.now(), detail });
   return detail;

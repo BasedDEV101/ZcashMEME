@@ -1,8 +1,15 @@
 import { GuillocheBand } from "./Guilloche.tsx";
 import { STAMP_COST_ZEC, type Collection } from "../lib/launchpad.ts";
+import type { ActivityCollection } from "../lib/activity.ts";
+import { LaunchPlatformPill } from "./LaunchPlatformPill.tsx";
 
 /** The registry, as read from Zcash. A collection with no balance cannot issue. */
-export function Registry({ collections, updated }: { collections: Collection[]; updated: string | null }) {
+export function Registry({ collections, activity = [], updated }: {
+  collections: Collection[];
+  activity?: ActivityCollection[];
+  updated: string | null;
+}) {
+  const platformByMint = new Map(activity.map((coin) => [coin.mint, coin.launchPlatform]));
   return (
     <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
@@ -40,7 +47,10 @@ export function Registry({ collections, updated }: { collections: Collection[]; 
                 return (
                   <tr key={c.mint} className="border-b border-engrave/12 align-top">
                     <td className="py-3.5 pr-6">
-                      <span className="font-display text-lg text-ink">{c.sym}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-display text-lg text-ink">{c.sym}</span>
+                        <LaunchPlatformPill platform={platformByMint.get(c.mint)} />
+                      </span>
                       <span className="tnum block font-data text-[0.68rem] break-all text-ink-soft">{c.mint}</span>
                     </td>
                     <td className="tnum py-3.5 pr-6 font-data text-sm text-ink">{c.stamps ?? 0}</td>

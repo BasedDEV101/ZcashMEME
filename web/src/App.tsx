@@ -129,7 +129,7 @@ function Page() {
             <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} rates={rates} />
           </Boundary>
           <Boundary what="burn feed">
-            <Burns burns={data?.burns ?? []} loading={loading} error={error} stale={stale} />
+            <Burns burns={data?.burns ?? []} collections={data?.collections ?? []} loading={loading} error={error} stale={stale} />
           </Boundary>
           <Footer />
         </main>
@@ -184,7 +184,7 @@ function Page() {
             />
           </Boundary>
           <Boundary what="register">
-            <Registry collections={collections} updated={updated} />
+            <Registry collections={collections} activity={data?.collections ?? []} updated={updated} />
           </Boundary>
           <Footer />
         </main>
@@ -282,6 +282,7 @@ function Page() {
         <Boundary what="burn feed">
           <Burns
             burns={data?.burns ?? []}
+            collections={data?.collections ?? []}
             loading={loading}
             error={error}
             stale={stale}

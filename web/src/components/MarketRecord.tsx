@@ -3,6 +3,7 @@ import { GuillocheBand } from "./Guilloche.tsx";
 import { marketCap, marketCapUsd, marketCapValue, money, toBigInt, when, type ActivityCollection, type Rates } from "../lib/activity.ts";
 import { CONFIG } from "../lib/config.ts";
 import { useTokenDetails, type TokenDetail } from "../lib/tokenDetails.ts";
+import { LaunchPlatformPill } from "./LaunchPlatformPill.tsx";
 
 const DEX = "https://dexscreener.com/solana";
 
@@ -152,6 +153,7 @@ function TokenDossier({ coin, detail, latest }: {
         <div className="min-w-0">
           <p className="truncate font-display text-xl font-semibold text-ink">{coin.symbol}</p>
           <p className="mt-0.5 text-sm leading-snug text-ink-soft">{coin.name}</p>
+          <LaunchPlatformPill platform={coin.launchPlatform} className="mt-2" />
         </div>
       </div>
 

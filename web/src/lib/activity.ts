@@ -22,6 +22,7 @@ export interface ActivityCollection {
   dexPairAddress?: string | null;
   quoteMint: string | null;
   createdHere?: boolean;
+  launchPlatform?: "pump" | "meteora";
   slot?: number;
   pricedAt?: number | null;
 }

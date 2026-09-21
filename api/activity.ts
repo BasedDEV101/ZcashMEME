@@ -18,7 +18,7 @@
 // filter can never drop a valid burn.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { decodeBase58, inParallel, json, lamportsTransferredTo, loadSnapshot, readCurves, readMints, readOnchainMetadata, readPumpCreate, readRates, rpc, saveSnapshot, type Rates } from "./_rpc.ts";
+import { decodeBase58, inParallel, json, lamportsTransferredTo, loadSnapshot, readCurves, readLaunchMetadata, readMints, readOnchainMetadata, readRates, rpc, saveSnapshot, type Rates } from "./_rpc.ts";
 import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.ts";
 import { normalizeTransaction, resolveKeys, type RpcTransaction } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
@@ -27,6 +27,7 @@ import { FEE_ADDRESSES, LAUNCH_FEE_LAMPORTS, MIN_ACCEPTED_FEE_LAMPORTS, REGISTER
 import history from "./_history.json" with { type: "json" };
 
 const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+const METEORA_DBC = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
 const FEE_PAGES = 10;      // operator history: low volume, read it all
 const BURN_PAGES = 2;      // per mint, newest first; older burns come from the snapshot
 const WIDTH = 5;           // concurrent RPC streams
@@ -130,6 +131,9 @@ export interface Collection {
   /** True when this coin's mint was created by the same transaction that
       registered it -- i.e. it was launched here, not attached afterwards. */
   createdHere: boolean;
+  /** Which launch route created the mint. Older stored rows predate this field
+      and are Pump launches, so clients treat a missing value as `pump`. */
+  launchPlatform?: "pump" | "meteora";
   /** The slot it was registered at, so the register's opening can be applied
       to entries seeded from a previous reading too. */
   slot: number;
@@ -264,6 +268,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
       destroyedTokens: null, marketCapQuote: null, quoteMint: null, pricedAt: null,
       supplyRaw: null, tokenProgramId: null, createdHere: true, slot: 0,
+      launchPlatform: "pump",
     });
 
     // Listing can fail part way and that is survivable: the collections are
@@ -355,21 +360,35 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       // transaction, so they are what the coin actually launched with. A coin
       // registered after launching elsewhere has none, and shows its ticker.
       let name: string | null = null;
-      let createdHere = false;
+      let launchPlatform: Collection["launchPlatform"];
       for (const ix of raw.transaction.message.instructions ?? []) {
-        if (keys[ix.programIdIndex] !== PUMP) continue;
-        const meta = readPumpCreate(decodeBase58(ix.data));
-        if (meta && meta.symbol.toUpperCase() === req.symbol) {
-          name = meta.name;
-          uris.set(req.mint, meta.uri);
-          createdHere = true;
+        const program = keys[ix.programIdIndex];
+        if (program === PUMP) {
+          const meta = readLaunchMetadata(decodeBase58(ix.data));
+          if (meta && meta.symbol.toUpperCase() === req.symbol) {
+            name = meta.name;
+            uris.set(req.mint, meta.uri);
+            launchPlatform = "pump";
+          }
+        }
+        // A DBC call alone is not enough: its account list must include the
+        // mint named by the registration memo. That keeps the same invariant
+        // as Pump -- the coin was created in this transaction, rather than an
+        // unrelated mint being attached after paying the fee.
+        if (program === METEORA_DBC && ix.accounts.some((account) => keys[account] === req.mint)) {
+          const meta = readLaunchMetadata(decodeBase58(ix.data));
+          if (meta && meta.symbol.toUpperCase() === req.symbol) {
+            name = meta.name;
+            uris.set(req.mint, meta.uri);
+            launchPlatform = "meteora";
+          }
         }
       }
 
       // Only coins created by the transaction that registered them. Paying the
       // fee with a memo naming somebody else's mint attaches a coin the pad
       // never launched, which is not what the register is for.
-      if (!createdHere || tx.slot < REGISTER_OPENS_AT_SLOT) continue;
+      if (!launchPlatform || tx.slot < REGISTER_OPENS_AT_SLOT) continue;
 
       // Supply minted by the create itself. Used only to skip scanning a coin
       // whose supply has never moved -- a burn always reduces supply, so
@@ -384,7 +403,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         minWholeTokens: req.minWholeTokens.toString(), signature: tx.signature,
         initialSupply: minted > 0n ? minted.toString() : null,
         launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
-        createdHere, slot: tx.slot,
+        createdHere: true, launchPlatform, slot: tx.slot,
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
         destroyedTokens: null, marketCapQuote: null, quoteMint: null, pricedAt: null,
         supplyRaw: null, tokenProgramId: null,
@@ -443,11 +462,13 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         const gone = BigInt(c.initialSupply) - BigInt(info.supply);
         c.destroyedTokens = (gone > 0n ? gone / 10n ** BigInt(c.decimals) : 0n).toString();
       }
-      if (c.initialSupply && info.supply === c.initialSupply) return;
       if (!c.name) {
         const meta = await readOnchainMetadata(r, c.mint, info);
         if (meta) { c.name = meta.name; if (meta.uri) uris.set(c.mint, meta.uri); }
       }
+      // Metadata is still worth reading for a brand-new Meteora launch whose
+      // supply has not moved. The expensive signature scan is not.
+      if (c.initialSupply && info.supply === c.initialSupply) return;
       const unit = 10n ** BigInt(c.decimals);
       const cfg: BridgeConfig = {
         solanaMint: c.mint, tokenProgramId: info.owner, decimals: c.decimals,
