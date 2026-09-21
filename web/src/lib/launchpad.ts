@@ -23,7 +23,7 @@ export const OPERATOR_ADDRESS = "26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA";
  * is its creator on pump.fun -- the fee is redirected by a fee-sharing config,
  * not by taking their name off it.
  */
-export const CREATOR_FEE_BPS = 200;
+export const CREATOR_FEE_BPS = 150;
 
 /**
  * What coins launched here trade against.
