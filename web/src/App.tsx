@@ -10,6 +10,7 @@ import { ALLOWANCE_STAMPS, CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC, 
 import { Leaderboard } from "./components/Leaderboard.tsx";
 import { Burns } from "./components/Burns.tsx";
 import { LatestCoins } from "./components/LatestCoins.tsx";
+import { NewVersion } from "./components/NewVersion.tsx";
 import { useActivity } from "./lib/activity.ts";
 
 export default function App() {
@@ -62,6 +63,7 @@ function Page() {
       <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
         <main className="mx-auto w-full max-w-5xl space-y-6">
           <Nav route={route} go={go} />
+          <NewVersion />
           <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
             <h1 className="font-display text-[1.9rem] leading-none text-engrave sm:text-[2.4rem]">
               What the pad has done
@@ -90,6 +92,7 @@ function Page() {
       <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
         <main className="mx-auto w-full max-w-5xl space-y-6">
           <Nav route={route} go={go} />
+          <NewVersion />
           <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
             <h1 className="font-display text-[1.9rem] leading-none text-engrave sm:text-[2.4rem]">
               Launch a coin
@@ -159,6 +162,7 @@ function Page() {
     <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
       <main className="mx-auto w-full max-w-5xl space-y-6">
         <Nav route={route} go={go} />
+        <NewVersion />
         <Certificate
           serial="000001"
           amount={formatTokens(BigInt(PROOF.mainnetAmount))}
