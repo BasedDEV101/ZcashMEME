@@ -1,4 +1,4 @@
-import type { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import type { BlockhashWithExpiryBlockHeight, Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { PublicKey as SolanaPublicKey } from "@solana/web3.js";
 import {
   METEORA_DBC_CONFIG_KEY,
@@ -103,4 +103,40 @@ export function formatTokenAmount(raw: string, decimals = 6): string {
   const whole = value / scale;
   const fraction = (value % scale).toString().padStart(decimals, "0").replace(/0+$/, "");
   return `${whole.toLocaleString("en-US")}${fraction ? `.${fraction}` : ""}`;
+}
+
+/**
+ * Confirm a submitted claim without turning a blockhash-expiry race into a
+ * false failure. Solana can finalize a transaction just as the block-height
+ * strategy expires; in that case `confirmTransaction` throws even though the
+ * signature is already successful in transaction history.
+ */
+export async function confirmClaimSignature(
+  connection: Connection,
+  signature: string,
+  blockhash?: BlockhashWithExpiryBlockHeight,
+): Promise<void> {
+  let primaryError: unknown;
+  try {
+    const result = blockhash
+      ? await connection.confirmTransaction({ signature, ...blockhash }, "confirmed")
+      : await connection.confirmTransaction(signature, "confirmed");
+    if (result.value.err) throw new Error(`Transaction ${signature.slice(0, 8)}… failed on chain: ${JSON.stringify(result.value.err)}`);
+    return;
+  } catch (reason) {
+    primaryError = reason;
+  }
+
+  // Reconcile against history after any timeout/expiry/RPC error. Five short
+  // reads cover index propagation without making the operator wait through a
+  // second full blockhash window.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const response = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+    const status = response.value[0];
+    if (status?.err) throw new Error(`Transaction ${signature.slice(0, 8)}… failed on chain: ${JSON.stringify(status.err)}`);
+    if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") return;
+    if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+
+  throw primaryError instanceof Error ? primaryError : new Error(`Transaction ${signature.slice(0, 8)}… was submitted but could not be confirmed.`);
 }

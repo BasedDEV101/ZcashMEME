@@ -4,6 +4,7 @@ import type { Transaction } from "@solana/web3.js";
 import type { ActivityCollection } from "../lib/activity.ts";
 import {
   buildPartnerFeeClaim,
+  confirmClaimSignature,
   formatTokenAmount,
   hasClaimableFees,
   isFeeAuthority,
@@ -100,11 +101,10 @@ export function MeteoraFeeAdmin({ collections, activityLoading, activityError, t
       }
 
       if (signAllTransactions) {
-        // Wallets commonly cap sign-all requests. Eight keeps one-click claiming
-        // useful as the launchpad grows without asking an extension to render an
-        // unbounded transaction list or relying on one expiring blockhash.
+        // Keep bulk signing, but use small groups so a blockhash does not age
+        // through a long wallet review before its transaction is submitted.
         const chunks: Transaction[][] = [];
-        for (let index = 0; index < transactions.length; index += 8) chunks.push(transactions.slice(index, index + 8));
+        for (let index = 0; index < transactions.length; index += 2) chunks.push(transactions.slice(index, index + 2));
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
           const chunk = chunks[chunkIndex];
           const latest = await connection.getLatestBlockhash("confirmed");
@@ -124,8 +124,7 @@ export function MeteoraFeeAdmin({ collections, activityLoading, activityError, t
           setClaim({ kind: "sending", message: `Confirming ${submittedSignatures.length} of ${transactions.length} submitted claims…` });
           const confirmations = await Promise.allSettled(
             submitted.map(async (signature) => {
-              const result = await connection.confirmTransaction({ signature, ...latest }, "confirmed");
-              if (result.value.err) throw new Error(`Transaction ${signature.slice(0, 8)}… failed on chain.`);
+              await confirmClaimSignature(connection, signature, latest);
               confirmedSignatures.push(signature);
             }),
           );
@@ -138,8 +137,7 @@ export function MeteoraFeeAdmin({ collections, activityLoading, activityError, t
           const signature = await sendTransaction(transactions[index], connection, { maxRetries: 3 });
           submittedSignatures.push(signature);
           setClaim({ kind: "sending", message: `Confirming claim ${index + 1} of ${transactions.length}…` });
-          const result = await connection.confirmTransaction(signature, "confirmed");
-          if (result.value.err) throw new Error(`Transaction ${signature.slice(0, 8)}… failed on chain.`);
+          await confirmClaimSignature(connection, signature);
           confirmedSignatures.push(signature);
         }
       }

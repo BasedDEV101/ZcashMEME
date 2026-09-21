@@ -45,7 +45,7 @@ must be referred to only as an unlinked hash-matched route.
 - Refresh reads the launch record and current on-chain fee vaults without submitting a transaction.
 - Each eligible pool has an independent Claim action.
 - Claim all builds one verified transaction per eligible pool. Wallets that support multi-signing receive
-  bounded batches of up to eight transactions; other wallets request approvals sequentially.
+  fresh-blockhash batches of up to two transactions; other wallets request approvals sequentially.
 - Controls remain disabled while transactions are building, awaiting signatures, sending, or confirming.
 - A successful claim reports confirmed pools and refreshes balances. Partial failure states the confirmed
   count separately from the submitted-but-unconfirmed count and keeps explorer links grouped by status.
