@@ -5,6 +5,7 @@ import { BurnPanel } from "./components/BurnPanel.tsx";
 import { GuillocheBand } from "./components/Guilloche.tsx";
 import { CONFIG, DEX_URL, FOMO_URL, PROOF, PUMP_URL, SOURCE_URL, X_URL, formatTokens } from "./lib/config.ts";
 import { CreateCoinPanel } from "./components/CreateCoinPanel.tsx";
+import { MeteoraLaunchPanel } from "./components/MeteoraLaunchPanel.tsx";
 import { Registry } from "./components/Registry.tsx";
 import { ALLOWANCE_STAMPS, CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
 import { Leaderboard } from "./components/Leaderboard.tsx";
@@ -14,6 +15,8 @@ import { MarketRecord } from "./components/MarketRecord.tsx";
 import { NewVersion } from "./components/NewVersion.tsx";
 import { Boundary } from "./components/Boundary.tsx";
 import { marketCap, money, toBigInt, tokens, useActivity } from "./lib/activity.ts";
+
+type LaunchMode = "meteora" | "pump";
 
 export default function App() {
   const wallets = useMemo(() => [], []);
@@ -36,6 +39,7 @@ function Page() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [updated, setUpdated] = useState<string | null>(null);
   const [route, setRoute] = useState(() => (typeof location !== "undefined" ? location.pathname : "/"));
+  const [launchMode, setLaunchMode] = useState<LaunchMode>("meteora");
   // One read of both chains, shared by the leaderboard, the burn feed and the
   // home page: three components asking separately would triple the RPC cost
   // for the same answer.
@@ -134,49 +138,33 @@ function Page() {
   }
 
   if (route.startsWith("/launch")) {
+    const meteora = launchMode === "meteora";
     return (
       <div className="site-bg min-h-dvh">
         <Nav route={route} go={go} theme={theme} setTheme={setTheme} />
         <main className="site-shell space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
           <NewVersion />
           <section className="page-heading paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12 lg:px-14">
-            <h1 className="max-w-4xl font-display text-[2.25rem] leading-[1.02] font-semibold tracking-[-0.03em] text-ink sm:text-[3.5rem]">
-              Launch on Solana. Register on Zcash.
-            </h1>
-            <p className="mt-7 max-w-[64ch] text-[0.98rem] leading-relaxed text-ink-soft">
-              Create a coin on pump.fun and its collection is registered on Zcash in the same breath. Its
-              holders can then burn and receive a certificate cut with the exact amount they destroyed —
-              the same mechanism {CONFIG.ticker} uses, with no special treatment for ours.
-            </p>
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h1 className="max-w-4xl font-display text-[2.25rem] leading-[1.02] font-semibold tracking-[-0.03em] text-ink sm:text-[3.5rem]">
+                  {meteora ? "Launch into STAMP liquidity." : "Launch on Solana. Register on Zcash."}
+                </h1>
+                <p className="mt-7 max-w-[64ch] text-[0.98rem] leading-relaxed text-ink-soft">
+                  {meteora
+                    ? "Create a token on a fixed Meteora bonding curve paired directly to STAMP. The pair, supply, fee, graduation target and liquidity lock are controlled by the pad; launchers provide only the token identity and its burn rule."
+                    : `Create a coin on pump.fun and register its collection on Zcash in the same transaction. This legacy route keeps the existing ZEC pair and ${CREATOR_FEE_PERCENT}% creator-fee setup.`}
+                </p>
+              </div>
+              <LaunchModePicker mode={launchMode} onChange={setLaunchMode} />
+            </div>
             <div className="mt-10 grid gap-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
-              <div className="rounded-2xl bg-paper-deep/55 p-5 sm:p-7"><Boundary what="launch form"><CreateCoinPanel /></Boundary></div>
-              <aside className="space-y-6 rounded-2xl bg-paper-deep/55 p-5 sm:p-7">
-                <h3 className="font-display text-xl text-engrave">How it works</h3>
-                <Warning title="One signature does everything">
-                  It creates the coin on pump.fun, routes its creator fee, pays the {LAUNCH_FEE_SOL} SOL
-                  launch fee and registers its collection. You cannot end up with a coin and no
-                  collection, or a paid fee and no coin.
-                </Warning>
-                <Warning title="Paired to ZEC, and the pad takes the creator fee">
-                  Your coin trades against ZEC, not SOL. It carries a {CREATOR_FEE_PERCENT}% creator fee
-                  which goes to the pad — that is what pays to inscribe your holders' stamps, and it is
-                  the reason the pad is named as creator on pump.fun. You launch from your own wallet,
-                  pay for it, and own every token you buy; nothing about the coin is held by us. If you
-                  want the creator fee yourself, launch on pump.fun directly instead.
-                </Warning>
-                <Warning title="Your stamps are already paid for">
-                  Each stamp costs about {STAMP_COST_ZEC} ZEC to inscribe, and your {LAUNCH_FEE_SOL} SOL
-                  covers the first {ALLOWANCE_STAMPS.toLocaleString("en-US")}. Your collection is topped
-                  up automatically — there is no ZEC for you to buy and nothing to fund before your
-                  holders start burning. Past that you can top it up yourself, at the address in the
-                  register. Nobody else's coin can spend your balance, and yours cannot drain anyone
-                  else's.
-                </Warning>
-                <Warning title="Nobody holds your holders' tokens">
-                  Burning destroys them on Solana. There is no escrow, no vault and no custody — for you
-                  or for us.
-                </Warning>
-              </aside>
+              <div className="rounded-2xl bg-paper-deep/55 p-5 sm:p-7">
+                <Boundary what={meteora ? "Meteora launch form" : "launch form"}>
+                  {meteora ? <MeteoraLaunchPanel /> : <CreateCoinPanel />}
+                </Boundary>
+              </div>
+              {meteora ? <MeteoraLaunchNotes /> : <PumpLaunchNotes />}
             </div>
           </section>
           <StatsStrip
@@ -414,6 +402,7 @@ function Nav({ route, go, theme, setTheme }: {
               className={`nav-link ${here === path ? "nav-link-active" : ""}`}
             >
               {label}
+              {path === "/launch" && <span className="nav-new-badge">New</span>}
             </button>
           ))}
         </div>
@@ -442,6 +431,100 @@ function Nav({ route, go, theme, setTheme }: {
       </div>
     </nav>
   );
+}
+
+function LaunchModePicker({ mode, onChange }: { mode: LaunchMode; onChange: (mode: LaunchMode) => void }) {
+  return (
+    <div className="launch-mode-switch" aria-label="Launch market">
+      <button
+        type="button"
+        aria-pressed={mode === "meteora"}
+        onClick={() => onChange("meteora")}
+        className={`launch-mode-option ${mode === "meteora" ? "launch-mode-option-active" : ""}`}
+      >
+        <MeteoraMark className="meteora-mark" />
+        <span>
+          <strong>STAMP Pair</strong>
+          <small>Meteora DBC</small>
+        </span>
+        <span className="nav-new-badge">New</span>
+      </button>
+      <button
+        type="button"
+        aria-pressed={mode === "pump"}
+        onClick={() => onChange("pump")}
+        className={`launch-mode-option ${mode === "pump" ? "launch-mode-option-active" : ""}`}
+      >
+        <PumpMark />
+        <span>
+          <strong>Pump</strong>
+          <small>ZEC Pair</small>
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function MeteoraLaunchNotes() {
+  return (
+    <aside className="space-y-6 rounded-2xl bg-paper-deep/55 p-5 sm:p-7">
+      <div className="flex items-center gap-2.5">
+        <MeteoraMark className="meteora-mark" />
+        <h2 className="font-display text-xl font-semibold text-engrave">The STAMP market</h2>
+      </div>
+      <Warning title="STAMP is the quote">
+        Every buy adds STAMP to the curve and every sell returns STAMP. Launchers cannot replace the pair,
+        alter the curve, change the supply, or enable a variable tax.
+      </Warning>
+      <Warning title="1.5% total — never stacked">
+        Traders pay 1.5% total. Meteora receives 0.3% and the remaining 1.2% accrues to the launchpad partner.
+        Fees are collected in STAMP and claimed to the configured receiving wallet.
+      </Warning>
+      <Warning title="Pump-shaped, owned by this pad">
+        The curve carries a 1B supply, sells 793.1M before graduation, targets 2.48M STAMP, and moves 206.9M
+        tokens into DAMM v2. Those parameters are fixed for every launch.
+      </Warning>
+      <Warning title="Liquidity stays locked">
+        On graduation, 100% of migrated liquidity is permanently locked. There is no launcher-controlled LP
+        withdrawal and no editable migration fee.
+      </Warning>
+      <Warning title="Verified from mainnet">
+        Before the launch button enables, the browser confirms that the public DBC config still matches this pair,
+        fee receiver, supply, graduation target, and liquidity lock. Its private key is never loaded by this page.
+      </Warning>
+    </aside>
+  );
+}
+
+function PumpLaunchNotes() {
+  return (
+    <aside className="space-y-6 rounded-2xl bg-paper-deep/55 p-5 sm:p-7">
+      <h2 className="font-display text-xl font-semibold text-engrave">How the legacy route works</h2>
+      <Warning title="One signature does everything">
+        It creates the coin on pump.fun, routes its creator fee, pays the {LAUNCH_FEE_SOL} SOL launch fee and
+        registers its collection. You cannot end up with a coin and no collection, or a paid fee and no coin.
+      </Warning>
+      <Warning title="Paired to ZEC, and the pad takes the creator fee">
+        Your coin trades against ZEC, not SOL. It carries a {CREATOR_FEE_PERCENT}% creator fee which goes to
+        the pad. You launch from your own wallet, pay for it, and own every token you buy.
+      </Warning>
+      <Warning title="Your stamps are already paid for">
+        Each stamp costs about {STAMP_COST_ZEC} ZEC to inscribe, and your {LAUNCH_FEE_SOL} SOL covers the first
+        {` ${ALLOWANCE_STAMPS.toLocaleString("en-US")} stamps`}. Past that, top up the collection from the register.
+      </Warning>
+      <Warning title="Nobody holds your holders' tokens">
+        Burning destroys them on Solana. There is no escrow, vault, or custody—for you or for us.
+      </Warning>
+    </aside>
+  );
+}
+
+function MeteoraMark({ className }: { className?: string }) {
+  return <img src="/meteora-mark.png" alt="" aria-hidden className={className} />;
+}
+
+function PumpMark() {
+  return <img src="/pump-pill.png" alt="" aria-hidden className="pump-pill-mark" />;
 }
 
 function FomoMark({ className }: { className?: string }) {

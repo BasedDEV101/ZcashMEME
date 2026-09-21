@@ -62,8 +62,48 @@ function localTokenDetailsApi() {
   };
 }
 
+function localMetadataApi() {
+  return {
+    name: "local-metadata-api",
+    apply: "serve" as const,
+    configureServer(server: { middlewares: { use(handler: (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse, next: () => void) => void): void } }) {
+      server.middlewares.use(async (req, res, next) => {
+        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+        if (pathname !== "/api/metadata") return next();
+        try {
+          // Local mainnet tests still need a public metadata URI. When a
+          // developer has no Blob credential locally, pass the explicit
+          // launch-time upload through the already deployed site endpoint.
+          // This happens only after the user presses Launch and after the DBC
+          // config check succeeds.
+          if (!process.env.BLOB_READ_WRITE_TOKEN) {
+            const chunks: Buffer[] = [];
+            for await (const chunk of req) chunks.push(chunk as Buffer);
+            const upstream = await fetch("https://www.zcashstamp.com/api/metadata", {
+              method: req.method,
+              headers: { "content-type": req.headers["content-type"] ?? "application/json" },
+              body: Buffer.concat(chunks),
+            });
+            res.statusCode = upstream.status;
+            res.setHeader("content-type", upstream.headers.get("content-type") ?? "application/json");
+            res.end(Buffer.from(await upstream.arrayBuffer()));
+            return;
+          }
+          const { default: handler } = await import("../api/metadata.ts");
+          await handler(req, res);
+        } catch (error) {
+          if (res.headersSent) return;
+          res.statusCode = 502;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: (error as Error).message }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), localActivityApi(), localTokenDetailsApi()],
+  plugins: [react(), tailwindcss(), localActivityApi(), localTokenDetailsApi(), localMetadataApi()],
   build: {
     rollupOptions: {
       input: {

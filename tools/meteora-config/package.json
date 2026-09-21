@@ -1,0 +1,20 @@
+{
+  "name": "zcash-meme-meteora-config-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "node --experimental-strip-types deploy-config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@meteora-ag/dynamic-bonding-curve-sdk": "1.5.12",
+    "@solana/web3.js": "1.99.0",
+    "bn.js": "5.2.5"
+  },
+  "devDependencies": {
+    "@types/bn.js": "5.2.0",
+    "@types/node": "24.10.1",
+    "typescript": "5.9.2"
+  }
+}

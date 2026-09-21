@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@meteora-ag/dynamic-bonding-curve-sdk": "1.5.12",
     "@noble/hashes": "1.8.0",
     "@noble/secp256k1": "2.3.0",
     "@pump-fun/pump-sdk": "^2.0.0",

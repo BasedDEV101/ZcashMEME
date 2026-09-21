@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "node --test tests/**/*.test.ts",
+    "meteora:config": "node --experimental-strip-types tools/meteora-config/deploy-config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -226,6 +226,7 @@ select.field-rule:focus {
 .nav-link {
   display: inline-flex;
   align-items: center;
+  gap: 0.5rem;
   min-height: 2.25rem;
   border-radius: 10px;
   padding: 0.45rem 0.75rem;
@@ -243,6 +244,77 @@ select.field-rule:focus {
 .nav-link-active {
   background: color-mix(in srgb, var(--color-engrave) 13%, transparent);
   color: var(--color-engrave);
+}
+
+.meteora-mark {
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.nav-new-badge {
+  display: inline-flex;
+  min-height: 1.15rem;
+  align-items: center;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--color-stamp) 18%, transparent);
+  padding: 0.1rem 0.32rem;
+  color: var(--color-stamp-deep);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.launch-mode-switch {
+  display: grid;
+  width: min(100%, 26rem);
+  flex: 0 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--color-engrave) 14%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-paper-deep) 72%, transparent);
+  padding: 0.4rem;
+}
+.launch-mode-option {
+  display: grid;
+  min-height: 3.75rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  transition: background-color 160ms ease, color 160ms ease, transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.launch-mode-option:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--color-engrave) 8%, transparent);
+}
+.launch-mode-option-active {
+  background: color-mix(in srgb, var(--color-engrave) 13%, transparent);
+}
+.launch-mode-option strong,
+.launch-mode-option small {
+  display: block;
+}
+.launch-mode-option strong {
+  color: var(--color-ink);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+}
+.launch-mode-option small {
+  margin-top: 0.08rem;
+  color: var(--color-ink-soft);
+  font-size: 0.65rem;
+}
+.pump-pill-mark {
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .nav-market-link {

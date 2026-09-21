@@ -58,6 +58,8 @@ Every raster shipped by this surface is accounted for here:
 | `web/public/favicon-16.png` | Deterministic tightly cropped 16 px derivative of the user-supplied transparent stamp artwork. | Small browser-tab icon. |
 | `web/public/favicon-32.png` | Deterministic tightly cropped 32 px derivative of the user-supplied transparent stamp artwork. | Standard browser-tab icon and ICO fallback source. |
 | `web/public/apple-touch-icon.png` | Deterministic tightly cropped 180 px derivative of the user-supplied transparent stamp artwork. | Apple home-screen and bookmark icon. |
+| `web/public/meteora-mark.png` | Official Meteora mark sourced from `https://github.com/MeteoraAg/docs/blob/main/assets/logo/meteora.png`. | STAMP launch selector and DBC launch form. |
+| `web/public/pump-pill.png` | User-supplied Pump pill artwork, tightly cropped without altering the mark. | Pump / ZEC pair selector. |
 
 ## Finish review
 
