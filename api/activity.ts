@@ -217,6 +217,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     return json(res, 200, {
       ...cached,
       collections,
+      feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
       currentMarketCapUsd: dex.get(FLAGSHIP.mint)?.marketCapUsd ?? cached.currentMarketCapUsd ?? null,
       served: "snapshot",
     }, 120);
