@@ -444,7 +444,7 @@ export async function readMints(r: SolanaRpc, mints: string[]): Promise<Map<stri
 }
 
 /** Dollars per unit of the quote currencies coins here trade against. */
-export interface Rates { zec?: number; sol?: number; at?: string }
+export interface Rates { zec?: number; sol?: number; at?: string; from?: string }
 
 /**
  * What ZEC and SOL are worth, so a market cap can be read as money.
@@ -454,22 +454,51 @@ export interface Rates { zec?: number; sol?: number; at?: string }
  * ranked a bigger ZEC coin below a smaller SOL one. A dollar figure is the
  * only form in which the two are the same kind of number.
  *
- * One call per rebuild. A failure returns nothing rather than a guess, and
- * the caller keeps the rates it already had.
+ * Two sources, because CoinGecko answers this machine and refuses Vercel's
+ * addresses, which is the sort of thing only a deployed attempt reveals. A
+ * failure returns nothing rather than a guess, and the caller keeps the rates
+ * it already had.
  */
+const SOURCES: { name: string; read: () => Promise<{ zec: number; sol: number } | null> }[] = [
+  {
+    name: "coinbase",
+    read: async () => {
+      const spot = async (pair: string) => {
+        const res = await fetch(`https://api.coinbase.com/v2/prices/${pair}-USD/spot`, {
+          signal: AbortSignal.timeout(6000),
+        });
+        if (!res.ok) return NaN;
+        const body = (await res.json()) as { data?: { amount?: string } };
+        return Number(body.data?.amount);
+      };
+      const [zec, sol] = await Promise.all([spot("ZEC"), spot("SOL")]);
+      return Number.isFinite(zec) && Number.isFinite(sol) ? { zec, sol } : null;
+    },
+  },
+  {
+    name: "coingecko",
+    read: async () => {
+      const res = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=zcash,solana&vs_currencies=usd",
+        { signal: AbortSignal.timeout(6000) },
+      );
+      if (!res.ok) return null;
+      const body = (await res.json()) as { zcash?: { usd?: number }; solana?: { usd?: number } };
+      const zec = body.zcash?.usd;
+      const sol = body.solana?.usd;
+      return Number.isFinite(zec) && Number.isFinite(sol) ? { zec: zec!, sol: sol! } : null;
+    },
+  },
+];
+
 export async function readRates(): Promise<Rates | null> {
-  try {
-    const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=zcash,solana&vs_currencies=usd",
-      { signal: AbortSignal.timeout(6000) },
-    );
-    if (!res.ok) return null;
-    const body = (await res.json()) as { zcash?: { usd?: number }; solana?: { usd?: number } };
-    const zec = body.zcash?.usd;
-    const sol = body.solana?.usd;
-    if (!Number.isFinite(zec) || !Number.isFinite(sol)) return null;
-    return { zec, sol, at: new Date().toISOString() };
-  } catch {
-    return null;
+  for (const source of SOURCES) {
+    try {
+      const got = await source.read();
+      if (got) return { ...got, at: new Date().toISOString(), from: source.name };
+    } catch {
+      // Try the next one.
+    }
   }
+  return null;
 }
