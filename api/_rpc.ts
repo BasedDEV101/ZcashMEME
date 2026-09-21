@@ -188,7 +188,19 @@ const SNAPSHOT = "activity/latest.json";
  * no answer. Only a successful rebuild overwrites it, so the fallback can go
  * stale but never wrong.
  */
+/**
+ * The last reading this container saw, kept in memory.
+ *
+ * Vercel reuses a warm container across invocations, so this survives between
+ * requests on the same instance. It is a fallback for the one case with no
+ * good answer: the stored snapshot could not be read, so a rebuild starts
+ * from nothing, lists no coins it already knew and prices none of them. That
+ * is how the market cap column kept dropping to zero.
+ */
+let lastGood: Record<string, unknown> | null = null;
+
 export async function saveSnapshot(body: unknown): Promise<void> {
+  lastGood = body as Record<string, unknown>;
   if (!process.env.BLOB_READ_WRITE_TOKEN) return;
   const { put } = await import("@vercel/blob");
   await put(SNAPSHOT, JSON.stringify(body), {
@@ -213,9 +225,11 @@ export async function loadSnapshot(attempt = 0): Promise<{ readable: boolean; da
     const found = await list({ prefix: SNAPSHOT, limit: 1 });
     const blob = found.blobs[0];
     if (!blob) return { readable: true, data: null };   // definitely absent
-    const res = await fetch(blob.url, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(blob.url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return retry(attempt);
-    return { readable: true, data: (await res.json()) as Record<string, unknown> };
+    const data = (await res.json()) as Record<string, unknown>;
+    lastGood = data;
+    return { readable: true, data };
   } catch {
     return retry(attempt);
   }
@@ -229,10 +243,14 @@ export async function loadSnapshot(attempt = 0): Promise<{ readable: boolean; da
  * leaderboard drops to a handful of coins. A single transient blob read was
  * enough to cause that, and asking twice costs a few hundred milliseconds.
  */
-async function retry(attempt: number) {
-  if (attempt > 0) return { readable: false, data: null };
-  await new Promise((r) => setTimeout(r, 250));
-  return loadSnapshot(attempt + 1);
+async function retry(attempt: number): Promise<{ readable: boolean; data: Record<string, unknown> | null }> {
+  if (attempt < 2) {
+    await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    return loadSnapshot(attempt + 1);
+  }
+  // Out of tries. A reading this container already served is far better than
+  // starting from nothing, and it is at worst a few minutes old.
+  return lastGood ? { readable: true, data: lastGood } : { readable: false, data: null };
 }
 
 export interface CurveState {
