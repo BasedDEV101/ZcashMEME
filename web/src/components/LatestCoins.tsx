@@ -1,5 +1,5 @@
 import { GuillocheBand } from "./Guilloche.tsx";
-import { sol, when, type ActivityCollection } from "../lib/activity.ts";
+import { marketCap, when, type ActivityCollection } from "../lib/activity.ts";
 
 const PUMP = "https://pump.fun/coin";
 
@@ -78,7 +78,7 @@ export function LatestCoins({ collections, loading, error, limit = 8, onMore }: 
                     <p className="mt-1 truncate text-[0.82rem] text-ink-soft">{c.name}</p>
                   )}
                   <p className="tnum mt-0.5 font-data text-[0.7rem] text-engrave-soft">
-                    {sol(c.marketCapLamports) ?? "—"}
+                    {marketCap(c.marketCapQuote, c.quoteMint) ?? "—"}
                   </p>
                 </a>
               </li>

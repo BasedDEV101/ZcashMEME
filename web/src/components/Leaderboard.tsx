@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { GuillocheBand } from "./Guilloche.tsx";
 import { SearchField } from "./Field.tsx";
-import { SOLSCAN, short, sol, tokens, when, type ActivityCollection } from "../lib/activity.ts";
+import { SOLSCAN, marketCap, short, tokens, when, type ActivityCollection } from "../lib/activity.ts";
 
 type Sort = "burns" | "marketCap" | "destroyed" | "newest" | "oldest";
 
@@ -41,7 +41,7 @@ const big = (v: string | null): bigint => (v === null ? -1n : BigInt(v));
 function order(a: ActivityCollection, b: ActivityCollection, by: Sort): number {
   switch (by) {
     case "marketCap": {
-      const d = big(b.marketCapLamports) - big(a.marketCapLamports);
+      const d = big(b.marketCapQuote) - big(a.marketCapQuote);
       return d === 0n ? 0 : d > 0n ? 1 : -1;
     }
     case "destroyed": {
@@ -247,7 +247,7 @@ function Row({ collection: c, rank, by, first }: {
 }
 
 function headline(c: ActivityCollection, by: Sort): string {
-  if (by === "marketCap") return sol(c.marketCapLamports) ?? "—";
+  if (by === "marketCap") return marketCap(c.marketCapQuote, c.quoteMint) ?? "—";
   if (by === "destroyed") return c.destroyedTokens === null ? "—" : tokens(c.destroyedTokens);
   if (by === "newest" || by === "oldest") return when(c.launchedAt);
   return tokens(c.burnedTokens);

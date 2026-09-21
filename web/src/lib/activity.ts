@@ -16,8 +16,8 @@ export interface ActivityCollection {
   refusedCount: number;
   burners: number;
   destroyedTokens: string | null;
-  marketCapLamports: string | null;
-  graduated: boolean;
+  marketCapQuote: string | null;
+  quoteMint: string | null;
   createdHere?: boolean;
   slot?: number;
 }
@@ -90,12 +90,25 @@ export function when(unix: number | null): string {
 
 export const SOLSCAN = "https://solscan.io";
 
-/** Lamports as SOL, at a readable number of digits for a market cap. */
-export function sol(lamports: string | null): string | null {
-  if (lamports === null) return null;
-  const n = Number(BigInt(lamports)) / 1e9;
-  if (n >= 1000) return `${Math.round(n).toLocaleString("en-US")} SOL`;
-  if (n >= 10) return `${n.toFixed(1)} SOL`;
-  if (n >= 0.01) return `${n.toFixed(2)} SOL`;
-  return `${n.toFixed(4)} SOL`;
+/**
+ * The quotes a coin here can be priced in, and how to read their raw units.
+ *
+ * Coins launched now are quoted in ZEC; the ones from before are quoted in
+ * SOL. A market cap therefore carries its own unit, and printing every number
+ * as SOL would have quietly mislabelled the ZEC ones by a factor of ten.
+ */
+const QUOTES: Record<string, { symbol: string; decimals: number }> = {
+  So11111111111111111111111111111111111111112: { symbol: "SOL", decimals: 9 },
+  A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS: { symbol: "ZEC", decimals: 8 },
+};
+
+/** A market cap in its own currency, at a readable number of digits. */
+export function marketCap(raw: string | null, quoteMint: string | null): string | null {
+  if (raw === null) return null;
+  // An unknown quote falls back to SOL's scale rather than to nothing: every
+  // coin priced before ZEC pairing is SOL-quoted and carries no quote field.
+  const quote = QUOTES[quoteMint ?? ""] ?? QUOTES.So11111111111111111111111111111111111111112;
+  const n = Number(BigInt(raw)) / 10 ** quote.decimals;
+  const digits = n >= 1000 ? 0 : n >= 10 ? 1 : n >= 0.01 ? 2 : 4;
+  return `${n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote.symbol}`;
 }

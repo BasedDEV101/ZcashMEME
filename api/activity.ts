@@ -55,9 +55,10 @@ export interface Collection {
       burnedTokens, and larger when tokens were burned without a memo — those
       earn no certificate but they are still destroyed. */
   destroyedTokens: string | null;
-  /** Market cap in lamports, null when there is no honest number to give. */
-  marketCapLamports: string | null;
-  graduated: boolean;
+  /** Market cap in the coin's own quote units, null when there is no honest
+      number to give, with the quote it is denominated in. */
+  marketCapQuote: string | null;
+  quoteMint: string | null;
   /** Raw supply and owning program, read from chain; pricing needs both. */
   supplyRaw: string | null;
   tokenProgramId: string | null;
@@ -125,7 +126,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       minWholeTokens: FLAGSHIP.minWholeTokens, signature: null, initialSupply: null,
       launchedAt: FLAGSHIP.launchedAt, launchedBy: null, decimals: 6,
       burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
-      destroyedTokens: null, marketCapLamports: null, graduated: false,
+      destroyedTokens: null, marketCapQuote: null, quoteMint: null,
       supplyRaw: null, tokenProgramId: null, createdHere: true, slot: 0,
     });
 
@@ -229,7 +230,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
         createdHere, slot: tx.slot,
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
-        destroyedTokens: null, marketCapLamports: null, graduated: false,
+        destroyedTokens: null, marketCapQuote: null, quoteMint: null,
         supplyRaw: null, tokenProgramId: null,
       });
     }
@@ -351,7 +352,8 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       for (const [mint, state] of curves) {
         const c = collections.get(mint);
         if (!c) continue;
-        c.marketCapLamports = state.marketCapLamports?.toString() ?? null;
+        c.marketCapQuote = state.marketCapQuote?.toString() ?? null;
+        c.quoteMint = state.quoteMint;
       }
     } catch (e) {
       // No market caps this time. The leaderboard still ranks by burns, which
@@ -386,7 +388,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
       historyUpdated: (history as { updated: string | null }).updated,
       computedAt: new Date().toISOString(),
-      priced: [...collections.values()].filter((c) => c.marketCapLamports).length,
+      priced: [...collections.values()].filter((c) => c.marketCapQuote).length,
       priceable: priceable.length,
       priceError,
       partial,

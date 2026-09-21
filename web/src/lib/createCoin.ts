@@ -7,7 +7,10 @@ import { encodeDeployRequest } from "@protocol/core/deploy-request.ts";
 import { MEMO_V3 } from "@protocol/solana/programs.ts";
 import { assertNotForbidden } from "@protocol/core/forbidden.ts";
 import BN from "bn.js";
-import { CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, LOOKUP_TABLE, OPERATOR_ADDRESS } from "./launchpad.ts";
+import {
+  CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, LOOKUP_TABLE, OPERATOR_ADDRESS,
+  QUOTE_MINT, QUOTE_TOKEN_PROGRAM,
+} from "./launchpad.ts";
 
 export interface CoinDetails {
   name: string;
@@ -82,12 +85,10 @@ export async function buildLaunch(
     creator: payer,
     user: payer,
     creatorFeeBps: new BN(CREATOR_FEE_BPS),
-    // ZEC pairing is written and verified but not switched on: quoting in ZEC
-    // names four more fixed accounts than the lookup table holds, which takes
-    // the transaction to 1220 bytes of the 1232 allowed. Twelve bytes of
-    // headroom is not enough to put in front of real launchers. Extending the
-    // table (scripts/extend-lookup-table.ts) wins back about 124, and this
-    // turns on with QUOTE_MINT/QUOTE_TOKEN_PROGRAM the moment it has.
+    // Quoted in ZEC, not SOL. A pad whose whole subject is Zcash quoting its
+    // coins in somebody else's currency is a detail people notice.
+    quoteMint: new PublicKey(QUOTE_MINT),
+    quoteTokenProgram: new PublicKey(QUOTE_TOKEN_PROGRAM),
     // Never on. Mayhem doubles the supply to 2B and lets pump's agent burn
     // tokens on its own -- burns nobody authorised, which would mint stamps
     // and wreck the collection's accounting.
@@ -106,14 +107,15 @@ export async function buildLaunch(
   // because the config's authority is the coin's creator, which is them.
   const operator = new PublicKey(OPERATOR_ADDRESS);
   const sharingConfig = await sdk.createFeeSharingConfig({ creator: payer, mint: mint.publicKey, pool: null });
-  // v1 handles SOL-quoted coins. A ZEC-quoted one needs updateFeeSharesV2,
-  // which moves its pending fees through the right quote ATAs -- switched on
-  // together with the quote mint above.
-  const shares = await sdk.updateFeeShares({
+  // v1 handles SOL-quoted coins only; a ZEC-quoted one needs v2, which moves
+  // its pending fees through the right quote ATAs.
+  const shares = await sdk.updateFeeSharesV2({
     authority: payer,
     mint: mint.publicKey,
     currentShareholders: [payer],
     newShareholders: [{ address: operator, shareBps: 10_000 }],
+    quoteMint: new PublicKey(QUOTE_MINT),
+    quoteTokenProgram: new PublicKey(QUOTE_TOKEN_PROGRAM),
   });
 
   const register = new TransactionInstruction({
