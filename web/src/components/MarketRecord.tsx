@@ -1,174 +1,125 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { GuillocheBand } from "./Guilloche.tsx";
-import { MarketPlot, type PlotPoint } from "./MarketPlot.tsx";
-import { marketCap, marketCapUsd, marketCapValue, toBigInt, type ActivityCollection, type Rates } from "../lib/activity.ts";
-import { readings, record, type Reading } from "../lib/history.ts";
+import { marketCap, marketCapUsd, marketCapValue, money, toBigInt, when, type ActivityCollection, type Rates } from "../lib/activity.ts";
+import { CONFIG } from "../lib/config.ts";
+import { useTokenDetails, type TokenDetail } from "../lib/tokenDetails.ts";
 
-/** A date as a document prints one. */
-const day = (t: number): string =>
-  new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const DEX = "https://dexscreener.com/solana";
 
 /**
- * Movement between the first reading this browser took and the latest one.
+ * A live market view for any priced collection on the pad.
  *
- * Signed, never red: stamp red belongs to cancellation, and a falling cap is
- * not a cancellation. A market cap of zero cannot be a denominator, which is
- * the ordinary state of a coin nobody has traded.
+ * The former browser-local plot could not draw a useful line until a visitor
+ * returned several times. DexScreener already has the real pair history, so
+ * the selected token now owns a full interactive chart from the first visit.
  */
-function movement(series: Reading[]): string | null {
-  if (series.length < 2) return null;
-  const first = Number(toBigInt(series[0].value) ?? 0n);
-  const last = Number(toBigInt(series[series.length - 1].value) ?? 0n);
-  if (!Number.isFinite(first) || !Number.isFinite(last) || first <= 0) return null;
-  const pct = ((last - first) / first) * 100;
-  if (Math.abs(pct) < 0.05) return "Unchanged";
-  const digits = Math.abs(pct) >= 10 ? 0 : 1;
-  return `${pct > 0 ? "+" : "−"}${Math.abs(pct).toFixed(digits)}%`;
-}
-
-/**
- * The market record for one coin on the pad.
- *
- * The pad reads a cap from wherever the coin trades; it keeps no price
- * history, and no endpoint here can be asked for yesterday. So the series is
- * this browser's own log, written on each visit, and the section says that in
- * the plate's own words rather than letting the line imply a past it does not
- * have.
- */
-export function MarketRecord({ collections, loading, error, rates }: {
+export function MarketRecord({ collections, loading, error, rates, theme }: {
   collections: ActivityCollection[];
   loading: boolean;
   error: string | null;
   rates?: Rates;
+  theme: "dark" | "light";
 }) {
   const id = useId();
   const [chosen, setChosen] = useState<string | null>(null);
 
-  // Priced coins only: a coin with no cap has nothing to plot, and offering it
-  // in the picker is offering an empty field.
-  //
-  // Ordered on the cap in its own quote units rather than on the raw integer,
-  // so the figures in the list descend as the list does. A ZEC cap and a SOL
-  // cap are still not the same measurement -- nothing here knows the rate --
-  // but a list that reads 4,892 ZEC under 4,120 SOL looks broken, and a raw
-  // sort produces exactly that from the quotes' different scales.
   const priced = useMemo(
     () =>
       collections
-        .filter((c) => toBigInt(c.marketCapQuote) !== null)
-        // Ordered in dollars, like the leaderboard: a raw-integer sort puts
-        // a bigger ZEC coin below a smaller SOL one.
+        .filter((c) => toBigInt(c.marketCapQuote) !== null || (c.marketCapUsd !== null && c.marketCapUsd !== undefined))
         .sort((a, b) =>
-          (marketCapUsd(b.marketCapQuote, b.quoteMint, rates)
+          (marketCapUsd(b.marketCapQuote, b.quoteMint, rates, b.marketCapUsd)
             ?? marketCapValue(b.marketCapQuote, b.quoteMint) ?? 0)
-          - (marketCapUsd(a.marketCapQuote, a.quoteMint, rates)
+          - (marketCapUsd(a.marketCapQuote, a.quoteMint, rates, a.marketCapUsd)
             ?? marketCapValue(a.marketCapQuote, a.quoteMint) ?? 0)),
-    [collections],
+    [collections, rates],
   );
 
-  // The feed's array identity changes on every render while it is still null,
-  // so the effect keys off the values instead. Recording is idempotent inside
-  // its own window, but a dependency that changes every render would still
-  // rewrite storage on every frame.
-  const signature = priced.map((c) => `${c.mint}:${c.marketCapQuote}`).join("|");
-  const [store, setStore] = useState<Record<string, Reading[]>>({});
-  useEffect(() => {
-    if (priced.length === 0) return;
-    setStore(record(priced.map((c) => ({ mint: c.mint, raw: c.marketCapQuote }))));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by value, see above
-  }, [signature]);
-
   const coin = priced.find((c) => c.mint === chosen) ?? priced[0] ?? null;
-  const series = readings(store, coin?.mint);
-  const points: PlotPoint[] = series.map((r) => ({ t: r.t, value: r.value }));
-
-  const latest = coin ? marketCap(coin.marketCapQuote, coin.quoteMint, rates) : null;
-  const caps = series.map((r) => toBigInt(r.value) ?? 0n);
-  const highRaw = caps.length ? caps.reduce((a, b) => (b > a ? b : a)).toString() : null;
-  const lowRaw = caps.length ? caps.reduce((a, b) => (b < a ? b : a)).toString() : null;
-  const moved = movement(series);
-
-  const caption = coin
-    ? `${coin.symbol} market cap, ${series.length} reading${series.length === 1 ? "" : "s"} taken in this browser` +
-      (series.length ? `, from ${marketCap(lowRaw, coin.quoteMint, rates) ?? "—"} to ${marketCap(highRaw, coin.quoteMint, rates) ?? "—"}. Latest ${latest ?? "—"}.` : ".")
-    : "No coin selected.";
+  const details = useTokenDetails(coin ? [coin.mint] : [], "full");
+  const detail = coin ? details[coin.mint] : undefined;
+  const latest = coin ? marketCap(coin.marketCapQuote, coin.quoteMint, rates, coin.marketCapUsd) : null;
+  const dexUrl = coin ? `${DEX}/${coin.mint}` : DEX;
+  const embedUrl = coin
+    ? `${DEX}/${coin.dexPairAddress ?? coin.mint}?embed=1&theme=${theme}&trades=0&info=0`
+    : null;
 
   return (
     <section id="market" className="paper-lift scroll-mt-6 bg-paper px-6 py-9 sm:px-10 sm:py-12">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <h2 className="font-display text-[1.7rem] leading-none text-engrave">The market record</h2>
-        <p className="font-data text-xs text-ink-soft">kept by this browser, from your first visit</p>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-3">
+        <h2 className="font-display text-[1.7rem] leading-none text-engrave">Live market</h2>
+        {coin && (
+          <a
+            href={dexUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft no-underline hover:text-engrave"
+          >
+            Open on DexScreener
+            <svg viewBox="0 0 16 16" aria-hidden className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <path d="M6 3h7v7M13 3 5.5 10.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M11 9.5V13H3V5h3.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+        )}
       </div>
       <div className="mt-5 text-engrave">
         <GuillocheBand className="h-5 w-full" />
       </div>
 
       {error ? (
-        <Note>Could not read the chains just now — {error}. Nothing already recorded is lost.</Note>
+        <Note>Could not read the chains just now — {error}. Reload in a moment.</Note>
       ) : loading ? (
         <Note>Reading both chains…</Note>
-      ) : !coin ? (
-        <Note>No coin on the pad carries a market cap yet. The plate opens with the first one that trades.</Note>
+      ) : !coin || !embedUrl ? (
+        <Note>No collection on the pad carries a live market yet.</Note>
       ) : (
         <>
-          <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[1fr_15rem]">
-            <div className="min-w-0">
-              <div className="relative max-w-[26rem]">
-                <label htmlFor={id} className="font-body text-[0.62rem] font-semibold tracking-[0.18em] text-ink-soft uppercase">
-                  Coin
-                </label>
-                <select
-                  id={id}
-                  value={coin.mint}
-                  onChange={(e) => setChosen(e.target.value)}
-                  className="field-rule mt-1 w-full appearance-none bg-transparent pr-7 pb-1.5 font-display text-[1.3rem] text-ink outline-none"
-                >
-                  {priced.map((c) => (
-                    <option key={c.mint} value={c.mint}>
-                      {c.symbol}
-                      {c.name ? ` — ${c.name}` : ""}
-                    </option>
-                  ))}
-                </select>
-                <span aria-hidden className="pointer-events-none absolute right-1 bottom-2.5 text-engrave/70">
-                  <svg width="11" height="7" viewBox="0 0 11 7" fill="none" stroke="currentColor" strokeWidth="1.3">
-                    <path d="M1 1 5.5 5.7 10 1" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-              </div>
-
-              <div className="mt-7">
-                <MarketPlot
-          rates={rates} points={points} quoteMint={coin.quoteMint} caption={caption} />
-              </div>
-
-              {series.length < 2 && (
-                <p className="mt-4 max-w-[58ch] text-[0.9rem] leading-relaxed text-ink-soft">
-                  One reading so far, taken just now. The line draws itself as you come back — there is no
-                  earlier price to plot, because the pad records burns on chain and not prices.
-                </p>
-              )}
+          <div className="mt-8">
+            <div className="relative w-full max-w-[32rem]">
+              <label htmlFor={id} className="font-body text-[0.62rem] font-semibold tracking-[0.18em] text-ink-soft uppercase">
+                Coin
+              </label>
+              <select
+                id={id}
+                value={coin.mint}
+                onChange={(e) => setChosen(e.target.value)}
+                className="field-rule mt-1 w-full appearance-none bg-transparent pr-9 font-display text-[1.15rem] text-ink outline-none sm:text-[1.3rem]"
+              >
+                {priced.map((c) => (
+                  <option key={c.mint} value={c.mint}>
+                    {c.symbol}{c.name ? ` — ${c.name}` : ""}
+                  </option>
+                ))}
+              </select>
+              <span aria-hidden className="pointer-events-none absolute right-3 bottom-4 text-engrave/70">
+                <svg width="11" height="7" viewBox="0 0 11 7" fill="none" stroke="currentColor" strokeWidth="1.3">
+                  <path d="M1 1 5.5 5.7 10 1" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
             </div>
 
-            <dl className="space-y-4 border-t border-engrave/20 pt-7 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-              <Entry label="Latest reading" value={latest ?? "—"} strong />
-              {/* A high and a low that are both the only reading are three
-                  copies of one figure. They appear once there is a range. */}
-              {series.length > 1 && (
-                <>
-                  <Entry label="Highest seen" value={marketCap(highRaw, coin.quoteMint, rates) ?? "—"} />
-                  <Entry label="Lowest seen" value={marketCap(lowRaw, coin.quoteMint, rates) ?? "—"} />
-                </>
-              )}
-              <Entry label="Readings" value={tally(series)} />
-              {moved && <Entry label="Since your first reading" value={moved} />}
-            </dl>
           </div>
 
-          <p className="mt-9 max-w-[64ch] border-t border-engrave/20 pt-5 text-sm text-ink-soft">
-            This plate is written in your browser. Each visit appends the cap as it stands, so the record
-            begins the first time you opened this page and exists nowhere else — clear your site data and
-            it starts again. Caps are read in the currency the coin actually trades against.
+          <div className="mt-6 grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="dex-chart-shell overflow-hidden rounded-xl bg-[#080808]">
+              <iframe
+                key={`${coin.mint}-${theme}`}
+                src={embedUrl}
+                title={`${coin.symbol} live chart on DexScreener`}
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                className="dex-chart-frame block w-full border-0"
+              />
+            </div>
+
+            <TokenDossier coin={coin} detail={detail} latest={latest} />
+          </div>
+
+          <p className="mt-5 max-w-[64ch] text-sm text-ink-soft">
+            Live price, volume, liquidity, and trading history from DexScreener. Change the collection
+            above to load its market without leaving the leaderboard.
           </p>
         </>
       )}
@@ -176,27 +127,75 @@ export function MarketRecord({ collections, loading, error, rates }: {
   );
 }
 
-/** Readings have to read sensibly before the first one is written, during the
- *  render that happens ahead of the effect that writes it. */
-function tally(series: Reading[]): string {
-  if (series.length === 0) return "taking the first";
-  if (series.length === 1) return "1, just now";
-  return `${series.length} since ${day(series[0].t)}`;
+function TokenDossier({ coin, detail, latest }: {
+  coin: ActivityCollection;
+  detail?: TokenDetail;
+  latest: string | null;
+}) {
+  const image = coin.mint === CONFIG.solanaMint ? "/stamp-mark-transparent.png" : detail?.image ?? coin.image;
+  const links = [
+    detail?.twitter ? { href: detail.twitter, label: "X", icon: "x" } : null,
+    detail?.website ? { href: detail.website, label: "Website", icon: "web" } : null,
+    detail?.telegram ? { href: detail.telegram, label: "Telegram", icon: "telegram" } : null,
+  ].filter(Boolean) as { href: string; label: string; icon: string }[];
+
+  return (
+    <aside className="market-dossier rounded-xl bg-paper-deep/70 p-5 sm:p-6">
+      <div className="flex items-center gap-4">
+        {image ? (
+          <img src={image} alt="" className="size-16 shrink-0 rounded-xl object-cover" />
+        ) : (
+          <span className="flex size-16 shrink-0 items-center justify-center rounded-xl bg-engrave/10 font-display text-lg font-semibold text-engrave">
+            {String(coin.symbol ?? "?").slice(0, 3)}
+          </span>
+        )}
+        <div className="min-w-0">
+          <p className="truncate font-display text-xl font-semibold text-ink">{coin.symbol}</p>
+          <p className="mt-0.5 text-sm leading-snug text-ink-soft">{coin.name}</p>
+        </div>
+      </div>
+
+      <p className="mt-5 line-clamp-4 text-sm leading-relaxed text-ink-soft">
+        {detail?.description ?? "No description has been published for this token."}
+      </p>
+
+      <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-5 border-t border-engrave/15 pt-5">
+        <DossierMetric label="Market cap" value={latest ?? "—"} />
+        <DossierMetric label="Volume 24h" value={money(coin.volume24hUsd ?? null) ?? "—"} />
+        <DossierMetric label="Holders" value={detail?.holders?.toLocaleString("en-US") ?? "Loading…"} />
+        <DossierMetric label="Launched" value={when(detail?.createdAt ?? coin.launchedAt)} />
+      </dl>
+
+      <div className="mt-6 flex flex-wrap gap-2 border-t border-engrave/15 pt-5">
+        {links.length ? links.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-engrave/10 px-3 text-xs font-semibold text-engrave no-underline hover:bg-engrave/15"
+          >
+            <SocialIcon kind={link.icon} />{link.label}
+          </a>
+        )) : <p className="text-xs text-ink-soft">No social links published.</p>}
+      </div>
+    </aside>
+  );
 }
 
-function Entry({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function DossierMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <dt className="font-body text-[0.62rem] tracking-[0.16em] text-ink-soft uppercase">{label}</dt>
-      <dd
-        className={`field-rule tnum pb-1 ${
-          strong ? "font-display text-[1.35rem] leading-tight text-engrave" : "font-data text-[0.82rem] text-ink"
-        }`}
-      >
-        {value}
-      </dd>
+    <div className="min-w-0">
+      <dt className="text-[0.6rem] font-semibold tracking-[0.1em] text-ink-soft uppercase">{label}</dt>
+      <dd className="tnum mt-1 truncate font-data text-sm text-ink">{value}</dd>
     </div>
   );
+}
+
+function SocialIcon({ kind }: { kind: string }) {
+  if (kind === "x") return <svg viewBox="0 0 16 16" aria-hidden className="size-3.5" fill="currentColor"><path d="M2.1 2h2.8l3.6 4.8L12.6 2h1.2L9.1 7.6 14 14h-2.8L7.4 9 3.3 14H2l4.8-5.8L2.1 2Zm2.2 1 7.4 10h1.5L5.8 3H4.3Z" /></svg>;
+  if (kind === "telegram") return <svg viewBox="0 0 16 16" aria-hidden className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="m2 7.6 11.5-4-2 9-3.2-2.5-1.8 1.6.2-2.8L11.3 5 5.7 8.2 2 7.6Z" strokeLinejoin="round" /></svg>;
+  return <svg viewBox="0 0 16 16" aria-hidden className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8" r="5.5" /><path d="M2.8 8h10.4M8 2.5c1.5 1.5 2.2 3.3 2.2 5.5S9.5 12 8 13.5C6.5 12 5.8 10.2 5.8 8S6.5 4 8 2.5Z" /></svg>;
 }
 
 function Note({ children }: { children: React.ReactNode }) {

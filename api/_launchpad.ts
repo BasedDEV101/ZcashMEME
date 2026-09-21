@@ -50,5 +50,5 @@ export const FLAGSHIP = {
   name: "Zcash Shielded Assets",
   image: null as string | null,
   minWholeTokens: "1000000",
-  launchedAt: 1789689600,
+  launchedAt: 1789928715,
 };

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Connection } from "@solana/web3.js";
 import { buildLaunch, uploadMetadata, type CoinDetails } from "../lib/createCoin.ts";
-import { CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC } from "../lib/launchpad.ts";
+import { ALLOWANCE_STAMPS, CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC } from "../lib/launchpad.ts";
 import { CONFIG } from "../lib/config.ts";
 
 type Stage = "idle" | "uploading" | "signing" | "sending" | "done";
@@ -18,6 +18,7 @@ export function CreateCoinPanel() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ mint: string; signature: string } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const announcementRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (wallet && !connected && !connecting) connect().catch((e: unknown) => setError((e as Error).message));
@@ -29,6 +30,10 @@ export function CreateCoinPanel() {
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  useEffect(() => {
+    if (error || result) announcementRef.current?.focus();
+  }, [error, result]);
 
   const set = <K extends keyof CoinDetails>(k: K, v: CoinDetails[K]) => setD((p) => ({ ...p, [k]: v }));
   const nameOk = d.name.trim().length > 0 && d.name.length <= 32;
@@ -59,7 +64,7 @@ export function CreateCoinPanel() {
 
   if (stage === "done" && result) {
     return (
-      <div className="space-y-5">
+      <div ref={announcementRef} tabIndex={-1} role="status" aria-live="polite" className="space-y-5 outline-none">
         <h3 className="font-display text-2xl text-engrave">{d.symbol} is live</h3>
         <p className="max-w-[58ch] text-[0.95rem] leading-relaxed text-ink-soft">
           Your coin exists on pump.fun and its collection is registered. Holders can burn it for stamps as
@@ -70,9 +75,9 @@ export function CreateCoinPanel() {
           <Row label="Transaction" value={result.signature} />
         </dl>
         <p className="max-w-[58ch] border-t border-engrave/25 pt-5 text-sm text-ink-soft">
-          One thing left to you: your collection pays for its own stamps, about {STAMP_COST_ZEC} ZEC each.
-          Fund it from the register below before your holders start burning, or their stamps queue until
-          you do.
+          Your launch includes automatic funding for the first {ALLOWANCE_STAMPS.toLocaleString("en-US")} stamps,
+          at about {STAMP_COST_ZEC} ZEC each. After that allowance is used, top up the collection from the
+          register so new burns can continue issuing stamps.
         </p>
         <a href={`https://pump.fun/coin/${result.mint}`} target="_blank" rel="noreferrer"
           className="inline-block bg-engrave px-6 py-3 font-display text-base tracking-[0.05em] text-paper uppercase no-underline">
@@ -190,7 +195,16 @@ export function CreateCoinPanel() {
           Your coin trades against ZEC and carries a {CREATOR_FEE_PERCENT}% creator fee, which goes to
           the pad and pays for your holders' stamps. This cannot be changed after launch.
         </p>
-        {error && <p className="mt-3 max-w-[58ch] text-sm text-stamp-deep">{error}</p>}
+        <div
+          ref={announcementRef}
+          tabIndex={-1}
+          role={error ? "alert" : "status"}
+          aria-live={error ? "assertive" : "polite"}
+          aria-atomic="true"
+          className="outline-none"
+        >
+          {error && <p className="mt-3 max-w-[58ch] text-sm text-stamp-deep">{error}</p>}
+        </div>
       </div>
     </div>
   );

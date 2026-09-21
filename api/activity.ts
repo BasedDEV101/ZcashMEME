@@ -33,6 +33,62 @@ const WIDTH = 5;           // concurrent RPC streams
 const MAX_FETCH = 160;     // transactions per request, across all mints
 const MAX_BURN_ROWS = 300;
 const PRICE_BATCH = 40;    // coins re-priced per rebuild, oldest price first
+const DEX_BATCH = 30;      // DexScreener accepts at most 30 token addresses per request
+const IMAGE_BATCH = 40;    // newest missing images to backfill without flooding pump's API
+
+interface DexMarket {
+  marketCapUsd: number | null;
+  volume24hUsd: number | null;
+  image: string | null;
+  liquidityUsd: number;
+  pairAddress: string | null;
+}
+
+/** Live market data fallback for coins whose public Solana RPC read was throttled. */
+async function readDexMarketData(mints: string[]): Promise<Map<string, DexMarket>> {
+  const wanted = new Set(mints);
+  const batches = Array.from({ length: Math.ceil(mints.length / DEX_BATCH) }, (_, i) =>
+    mints.slice(i * DEX_BATCH, (i + 1) * DEX_BATCH));
+  const out = new Map<string, DexMarket>();
+
+  await Promise.all(batches.map(async (batch) => {
+    if (batch.length === 0) return;
+    try {
+      const res = await fetch(`https://api.dexscreener.com/tokens/v1/solana/${batch.join(",")}`, {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) return;
+      const pairs = (await res.json()) as {
+        baseToken?: { address?: string };
+        pairAddress?: string;
+        marketCap?: number | null;
+        fdv?: number | null;
+        volume?: { h24?: number | null };
+        liquidity?: { usd?: number | null };
+        info?: { imageUrl?: string | null };
+      }[];
+      for (const pair of pairs) {
+        const mint = pair.baseToken?.address;
+        if (!mint || !wanted.has(mint)) continue;
+        const liquidityUsd = Number.isFinite(pair.liquidity?.usd) ? pair.liquidity!.usd! : 0;
+        const current = out.get(mint);
+        if (current && current.liquidityUsd > liquidityUsd) continue;
+        const rawCap = pair.marketCap ?? pair.fdv;
+        const marketCapUsd = typeof rawCap === "number" && Number.isFinite(rawCap) && rawCap >= 0
+          ? rawCap : null;
+        const volume24hUsd = typeof pair.volume?.h24 === "number" && Number.isFinite(pair.volume.h24)
+          ? pair.volume.h24 : null;
+        const image = typeof pair.info?.imageUrl === "string" && /^https:\/\//.test(pair.info.imageUrl)
+          ? pair.info.imageUrl : null;
+        const pairAddress = typeof pair.pairAddress === "string" ? pair.pairAddress : null;
+        out.set(mint, { marketCapUsd, volume24hUsd, image, liquidityUsd, pairAddress });
+      }
+    } catch { /* on-chain pricing and existing artwork remain authoritative */ }
+  }));
+
+  return out;
+}
 
 export interface Burn {
   signature: string; mint: string; symbol: string; slot: number; blockTime: number | null;
@@ -59,6 +115,12 @@ export interface Collection {
   /** Market cap in the coin's own quote units, null when there is no honest
       number to give, with the quote it is denominated in. */
   marketCapQuote: string | null;
+  /** Direct USD fallback from the most liquid indexed trading pair. */
+  marketCapUsd?: number | null;
+  /** Rolling 24-hour USD trading volume from the most liquid indexed pair. */
+  volume24hUsd?: number | null;
+  /** Most-liquid indexed DexScreener pair, used for the embedded live chart. */
+  dexPairAddress?: string | null;
   quoteMint: string | null;
   /** When this row was last priced, so refreshing can rotate. */
   pricedAt: number | null;
@@ -140,7 +202,24 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
   const cached = snapshot.data;
   const computedAt = typeof cached?.computedAt === "string" ? Date.parse(cached.computedAt) : 0;
   if (cached && Date.now() - computedAt < FRESH_MS) {
-    return json(res, 200, { ...cached, served: "snapshot" }, 120);
+    const stored = (Array.isArray(cached.collections) ? cached.collections : []) as Collection[];
+    const dex = await readDexMarketData(stored.map((c) => c.mint));
+    const collections = stored.map((c) => {
+      const live = dex.get(c.mint);
+      return live ? {
+        ...c,
+        marketCapUsd: live.marketCapUsd ?? c.marketCapUsd ?? null,
+        volume24hUsd: live.volume24hUsd ?? c.volume24hUsd ?? null,
+        dexPairAddress: live.pairAddress ?? c.dexPairAddress ?? null,
+        image: c.image ?? live.image,
+      } : c;
+    });
+    return json(res, 200, {
+      ...cached,
+      collections,
+      currentMarketCapUsd: dex.get(FLAGSHIP.mint)?.marketCapUsd ?? cached.currentMarketCapUsd ?? null,
+      served: "snapshot",
+    }, 120);
   }
 
   try {
@@ -452,6 +531,16 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     //          A failed fetch keeps the rates already stored rather than
     //          dropping every coin back to raw ZEC.
     const rates: Rates = (await readRates()) ?? ((cached?.rates as Rates | undefined) ?? {});
+    const dex = await readDexMarketData([...collections.keys()]);
+    for (const c of collections.values()) {
+      const live = dex.get(c.mint);
+      if (!live) continue;
+      c.marketCapUsd = live.marketCapUsd ?? c.marketCapUsd ?? null;
+      c.volume24hUsd = live.volume24hUsd ?? c.volume24hUsd ?? null;
+      c.dexPairAddress = live.pairAddress ?? c.dexPairAddress ?? null;
+      c.image ??= live.image;
+    }
+    const currentMarketCapUsd = dex.get(FLAGSHIP.mint)?.marketCapUsd ?? null;
 
     // ---- 4. images, best effort: a launcher's host being down must not empty
     //         the leaderboard.
@@ -465,6 +554,24 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         if (typeof meta.image === "string" && /^https:\/\//.test(meta.image)) c.image = meta.image;
       } catch { /* leave it without an image */ }
     }));
+
+    // A local rebuild has no production snapshot to carry old metadata URIs.
+    // Backfill only the newest missing images from pump's public coin record.
+    const missingImages = [...collections.values()]
+      .filter((c) => !c.image)
+      .sort((a, b) => (b.launchedAt ?? 0) - (a.launchedAt ?? 0))
+      .slice(0, IMAGE_BATCH);
+    await inParallel(missingImages, 5, async (c) => {
+      try {
+        const res = await fetch(`https://frontend-api-v3.pump.fun/coins/${c.mint}`, {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) return;
+        const coin = (await res.json()) as { image_uri?: string | null };
+        if (typeof coin.image_uri === "string" && /^https:\/\//.test(coin.image_uri)) c.image = coin.image_uri;
+      } catch { /* initials remain as the honest empty-image state */ }
+    });
 
     const priorEligible = (Array.isArray(cached?.collections) ? (cached.collections as Collection[]) : [])
       .filter((c) => c?.mint && eligible(c));
@@ -486,6 +593,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       computedAt: new Date().toISOString(),
       cursors,
       rates,
+      currentMarketCapUsd: currentMarketCapUsd ?? cached?.currentMarketCapUsd ?? null,
       // Diagnostics: the market cap column kept flickering and two rounds of
       // reasoning about why were wrong, so the answer is reported rather than
       // inferred.

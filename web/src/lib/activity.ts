@@ -17,6 +17,9 @@ export interface ActivityCollection {
   burners: number;
   destroyedTokens: string | null;
   marketCapQuote: string | null;
+  marketCapUsd?: number | null;
+  volume24hUsd?: number | null;
+  dexPairAddress?: string | null;
   quoteMint: string | null;
   createdHere?: boolean;
   slot?: number;
@@ -45,6 +48,8 @@ export interface Activity {
   feeSol: number;
   historyUpdated: string | null;
   rates?: Rates;
+  /** Live flagship market cap in USD, read from its active DEX pair. */
+  currentMarketCapUsd?: number | null;
   /** When this was last rebuilt from chain. */
   computedAt?: string;
   /** True when an RPC failed and this is the last good answer instead. */
@@ -146,14 +151,18 @@ export function marketCapUsd(
   raw: string | null | undefined,
   quoteMint: string | null | undefined,
   rates: Rates | undefined,
+  directUsd?: number | null,
 ): number | null {
   const n = marketCapValue(raw, quoteMint);
-  if (n === null || !rates) return null;
-  const quote = QUOTES[quoteMint ?? ""] ?? QUOTES.So11111111111111111111111111111111111111112;
-  const rate = quote.symbol === "ZEC" ? rates.zec : rates.sol;
-  if (!rate || !Number.isFinite(rate)) return null;
-  const usd = n * rate;
-  return Number.isFinite(usd) ? usd : null;
+  if (n !== null && rates) {
+    const quote = QUOTES[quoteMint ?? ""] ?? QUOTES.So11111111111111111111111111111111111111112;
+    const rate = quote.symbol === "ZEC" ? rates.zec : rates.sol;
+    if (rate && Number.isFinite(rate)) {
+      const usd = n * rate;
+      if (Number.isFinite(usd)) return usd;
+    }
+  }
+  return typeof directUsd === "number" && Number.isFinite(directUsd) && directUsd >= 0 ? directUsd : null;
 }
 
 /** $980, $150k, $1.2M — the form a market cap is actually read in. */
@@ -179,8 +188,9 @@ export function marketCap(
   raw: string | null | undefined,
   quoteMint: string | null | undefined,
   rates?: Rates,
+  directUsd?: number | null,
 ): string | null {
-  const usd = money(marketCapUsd(raw, quoteMint, rates));
+  const usd = money(marketCapUsd(raw, quoteMint, rates, directUsd));
   if (usd) return usd;
   const n = marketCapValue(raw, quoteMint);
   if (n === null) return null;

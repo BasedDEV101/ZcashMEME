@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Guilloche, GuillocheBand } from "./Guilloche.tsx";
+import { GuillocheBand } from "./Guilloche.tsx";
 
 /**
  * The document itself. Everything on this site is a part of it: the hero is a
@@ -28,29 +28,28 @@ export function Certificate({
   counterfoil?: ReactNode;
 }) {
   return (
-    <article className="paper-lift relative bg-paper text-ink">
-      <div className="grid lg:grid-cols-[1fr_16rem]">
-        <div className="relative overflow-hidden px-6 py-8 sm:px-10 sm:py-12">
-          <Guilloche
-            size={360}
-            opacity={0.2}
-            className="pointer-events-none absolute -right-28 -bottom-24 text-engrave sm:-right-20"
-          />
+    <article className="certificate-shell paper-lift relative overflow-hidden bg-paper text-ink">
+      <div className="certificate-grid">
+        <div className="certificate-main relative overflow-hidden px-6 py-8 sm:px-10 sm:py-12">
+          <div className="certificate-stamp-watermark" aria-hidden="true">
+            <img src="/stamp-mark.png" alt="" width="500" height="500" />
+          </div>
 
-          {cancelled && (
-            <p
-              className="stamped strike-in pointer-events-none absolute top-6 right-4 z-10 px-2.5 py-1.5 font-display text-[clamp(0.95rem,3.6vw,1.9rem)] leading-none font-semibold sm:top-10 sm:right-9 sm:px-3"
-              style={{ transform: "rotate(-5.5deg)" }}
-            >
-              CANCELLED
-            </p>
-          )}
-
-          <header className="relative pr-32 sm:pr-48">
-            <h2 className="font-display text-[1.6rem] leading-none tracking-[0.02em] text-engrave sm:text-[2rem]">
-              Certificate of Destruction
-            </h2>
-            <p className="tnum mt-2 font-data text-xs text-ink-soft">No. {serial}</p>
+          <header className="certificate-header relative">
+            <div>
+              <h2 className="font-display text-[1.65rem] leading-[1.02] tracking-[-0.02em] text-engrave sm:text-[2rem]">
+                Certificate of Destruction
+              </h2>
+              <p className="tnum mt-2 font-data text-xs text-ink-soft">No. {serial}</p>
+            </div>
+            {cancelled && (
+              <p
+                className="certificate-stamp stamped strike-in pointer-events-none px-2.5 py-1.5 font-display text-base leading-none font-semibold sm:px-3 sm:text-lg"
+                style={{ transform: "rotate(-5.5deg)" }}
+              >
+                CANCELLED
+              </p>
+            )}
           </header>
 
           <div className="relative mt-7 text-engrave">
@@ -88,7 +87,7 @@ export function Certificate({
         </div>
 
         {counterfoil && (
-          <aside className="perforation relative bg-paper-deep/45 px-6 py-8 sm:px-8 lg:py-12">
+          <aside className="certificate-counterfoil perforation relative bg-paper-deep/45 px-6 py-8 sm:px-8">
             {counterfoil}
           </aside>
         )}

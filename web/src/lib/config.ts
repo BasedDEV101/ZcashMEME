@@ -49,4 +49,9 @@ export const SOURCE_URL = "https://github.com/BasedDEV101/ZcashMEME";
 /** Where the project posts. */
 export const X_URL = "https://x.com/Zip227";
 
+/** Public market and launch destinations for the live $STAMP mint. */
+export const FOMO_URL = `https://fomo.family/tokens/solana/${CONFIG.solanaMint}`;
+export const DEX_URL = `https://dexscreener.com/solana/${CONFIG.solanaMint}`;
+export const PUMP_URL = `https://pump.fun/coin/${CONFIG.solanaMint}`;
+
 export const formatTokens = (n: bigint): string => n.toLocaleString("en-US");

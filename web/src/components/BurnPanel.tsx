@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { getAssociatedTokenAddress } from "@solana/spl-token";
@@ -19,6 +19,7 @@ export function BurnPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  const announcementRef = useRef<HTMLDivElement>(null);
 
   // select() only records the choice; the provider needs a render to adopt it.
   // Calling connect() in the same tick connects an adapter the provider has
@@ -30,6 +31,10 @@ export function BurnPanel() {
       connect().catch((e: unknown) => setError((e as Error).message));
     }
   }, [wallet, connected, connecting, connect]);
+
+  useEffect(() => {
+    if (error || signature) announcementRef.current?.focus();
+  }, [error, signature]);
 
   const address = dest?.kind === "generated" ? dest.wallet.address : dest?.kind === "own" ? own.trim() : "";
   const addressOk = useMemo(() => {
@@ -228,12 +233,21 @@ export function BurnPanel() {
         <p className="mt-3 max-w-[58ch] text-sm text-ink-soft">
           This cannot be undone, reversed or refunded. Your tokens stop existing the moment you sign.
         </p>
-        {error && <p className="mt-3 text-sm text-stamp-deep">{error}</p>}
-        {signature && (
-          <p className="tnum mt-3 font-data text-sm break-all text-engrave">
-            Burned. Signature {signature}
-          </p>
-        )}
+        <div
+          ref={announcementRef}
+          tabIndex={-1}
+          role={error ? "alert" : "status"}
+          aria-live={error ? "assertive" : "polite"}
+          aria-atomic="true"
+          className="outline-none"
+        >
+          {error && <p className="mt-3 text-sm text-stamp-deep">{error}</p>}
+          {signature && (
+            <p className="tnum mt-3 font-data text-sm break-all text-engrave">
+              Burned. Signature {signature}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

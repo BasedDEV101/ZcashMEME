@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
-/* Faces chosen as objects from the document world: a didone for engraved
-   numerals, a workhorse grotesque for the body, a typewriter face for serials
-   and machine data. Self-hosted, not CDN. */
+/* Self-hosted faces: Space Grotesk carries the product UI while Courier Prime
+   remains reserved for public chain data and addresses. */
+@import "@fontsource/space-grotesk/400.css";
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
 @import "@fontsource/bodoni-moda/400.css";
 @import "@fontsource/bodoni-moda/600.css";
 @import "@fontsource/bodoni-moda/400-italic.css";
@@ -13,35 +16,49 @@
 @import "@fontsource/courier-prime/700.css";
 
 @theme {
-  --color-paper: #f2ede1;
-  --color-paper-deep: #e7dfcd;
-  --color-paper-edge: #d9cfb8;
-  --color-ink: #2a2724;
-  --color-ink-soft: #5d574c;
-  --color-engrave: #1b3a2f;
-  --color-engrave-soft: #3d6353;
-  --color-stamp: #d8455f;
-  --color-stamp-deep: #a32b42;
+  --color-paper: #12100e;
+  --color-paper-deep: #080706;
+  --color-paper-edge: #2a2118;
+  --color-ink: #f7efe2;
+  --color-ink-soft: #b7a791;
+  --color-engrave: #ff9a1f;
+  --color-engrave-soft: #d67722;
+  --color-stamp: #f25516;
+  --color-stamp-deep: #ff6a21;
 
-  --font-display: "Bodoni Moda", "Didot", "Times New Roman", serif;
-  --font-body: "Libre Franklin", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Libre Franklin", system-ui, sans-serif;
+  --font-body: "Space Grotesk", "Libre Franklin", system-ui, sans-serif;
   --font-data: "Courier Prime", ui-monospace, monospace;
 }
 
-/* The scene: a document read in daylight, on a phone, by someone about to
-   destroy something of theirs. Paper, not a screen pretending to be one. */
 html {
   background-color: var(--color-paper-deep);
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+html[data-theme="light"] {
+  --color-paper: #fffaf1;
+  --color-paper-deep: #f1e7d7;
+  --color-paper-edge: #d9c9b2;
+  --color-ink: #21170f;
+  --color-ink-soft: #6f5b49;
+  --color-engrave: #9f450f;
+  --color-engrave-soft: #bb651f;
+  --color-stamp: #b83a0e;
+  --color-stamp-deep: #a8320e;
   color-scheme: light;
 }
 
 body {
   margin: 0;
+  overflow-x: clip;
   background-color: var(--color-paper-deep);
   color: var(--color-ink);
   font-family: var(--font-body);
   font-size: 1rem;
   line-height: 1.6;
+  min-width: 320px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -80,9 +97,38 @@ a {
   background-image: linear-gradient(to top, color-mix(in srgb, var(--color-engrave) 38%, transparent) 1px, transparent 1px);
 }
 
+input.field-rule,
+textarea.field-rule,
+select.field-rule {
+  border: 1px solid color-mix(in srgb, var(--color-engrave) 19%, transparent);
+  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--color-paper-deep) 62%, transparent);
+  background-image: none;
+  padding: 0.72rem 0.85rem;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+input.field-rule:hover,
+textarea.field-rule:hover,
+select.field-rule:hover {
+  border-color: color-mix(in srgb, var(--color-engrave) 34%, transparent);
+}
+input.field-rule:focus,
+textarea.field-rule:focus,
+select.field-rule:focus {
+  border-color: var(--color-engrave);
+  background-color: color-mix(in srgb, var(--color-paper-deep) 82%, transparent);
+}
+
+.paper-lift button {
+  border-radius: 10px;
+}
+.paper-lift button:disabled {
+  opacity: 0.58;
+}
+
 /* The perforation between a certificate and its counterfoil. */
 .perforation {
-  background-image: radial-gradient(circle at center, var(--color-paper-deep) 0 2.4px, transparent 2.6px);
+  background-image: radial-gradient(circle at center, var(--color-paper) 0 2.4px, transparent 2.6px);
   background-size: 11px 11px;
   background-repeat: repeat-y;
   background-position: center top;
@@ -94,12 +140,9 @@ a {
   }
 }
 
-/* Paper has weight: an offset and a real blur, never a coloured halo. */
 .paper-lift {
-  box-shadow:
-    0 1px 0 0 color-mix(in srgb, var(--color-paper-edge) 90%, transparent),
-    0 18px 38px -22px color-mix(in srgb, var(--color-ink) 55%, transparent),
-    0 2px 6px -3px color-mix(in srgb, var(--color-ink) 22%, transparent);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px -40px rgb(0 0 0 / 0.8);
 }
 
 /* A rubber stamp sits slightly off-angle, ink uneven, never crisp. */
@@ -107,7 +150,6 @@ a {
   color: var(--color-stamp-deep);
   border: 2.5px solid currentColor;
   opacity: 0.86;
-  mix-blend-mode: multiply;
   letter-spacing: 0.14em;
 }
 
@@ -128,5 +170,444 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .strike-in {
     animation-duration: 1ms;
+  }
+}
+
+/* Application shell ---------------------------------------------------- */
+
+.site-bg {
+  background:
+    radial-gradient(circle at 88% 7%, color-mix(in srgb, var(--color-stamp) 9%, transparent), transparent 28rem),
+    var(--color-paper-deep);
+  color: var(--color-ink);
+}
+
+.site-shell {
+  width: 100%;
+  max-width: 94rem;
+  margin-inline: auto;
+}
+
+.site-nav {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-engrave) 13%, transparent);
+  background: color-mix(in srgb, var(--color-paper-deep) 88%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.nav-scroll {
+  scrollbar-width: none;
+}
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.brand-mark {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.brand-stamp {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.footer-stamp {
+  width: 2.65rem;
+  height: 2.65rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  color: var(--color-ink-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.nav-link:hover {
+  background: color-mix(in srgb, var(--color-engrave) 8%, transparent);
+  color: var(--color-ink);
+}
+.nav-link-active {
+  background: color-mix(in srgb, var(--color-engrave) 13%, transparent);
+  color: var(--color-engrave);
+}
+
+.nav-market-link {
+  display: inline-flex;
+  min-height: 2.35rem;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--color-engrave) 14%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-engrave) 6%, transparent);
+  padding: 0.45rem 0.7rem;
+  color: var(--color-ink-soft);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+.nav-market-link:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--color-stamp) 35%, transparent);
+  background: color-mix(in srgb, var(--color-stamp) 11%, transparent);
+  color: var(--color-ink);
+}
+.nav-market-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.dex-mark {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+  opacity: 0.88;
+  mix-blend-mode: screen;
+}
+html[data-theme="light"] .dex-mark {
+  filter: invert(1);
+  mix-blend-mode: multiply;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-engrave) 10%, transparent);
+  color: var(--color-engrave);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.theme-toggle:hover {
+  background: color-mix(in srgb, var(--color-engrave) 18%, transparent);
+  color: var(--color-ink);
+}
+
+/* Hero --------------------------------------------------------------- */
+
+.hero-surface {
+  background: #090705;
+  box-shadow: 0 32px 78px -44px rgb(0 0 0 / 0.95);
+}
+
+.hero-art {
+  background-image: url("/stamp-hero-v2.png");
+  background-position: center right;
+  background-size: cover;
+  filter: saturate(0.95) contrast(1.03);
+}
+
+.hero-shade {
+  background: linear-gradient(90deg, rgb(5 5 4 / 0.97) 0%, rgb(5 5 4 / 0.92) 35%, rgb(5 5 4 / 0.48) 59%, rgb(5 5 4 / 0.08) 100%);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.ui-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 12px;
+  padding: 0.7rem 1.1rem;
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), background-color 160ms ease, color 160ms ease;
+}
+.ui-button:hover {
+  transform: translateY(-1px);
+}
+.ui-button-primary {
+  background: #ff781f;
+  color: #160b04;
+}
+.ui-button-primary:hover {
+  background: #ff942f;
+}
+.ui-button-secondary {
+  background: #f5efe2;
+  color: #17100b;
+}
+.ui-button-secondary:hover {
+  background: #fffaf1;
+}
+.ui-button-ghost {
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background: rgb(255 255 255 / 0.055);
+  color: #f5efe2;
+}
+.ui-button-ghost:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.fomo-eyes {
+  width: 1.18rem;
+  height: 1.18rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+  opacity: 0.76;
+  filter: grayscale(0.72) sepia(0.08) brightness(1.05);
+}
+.fomo-eyes-nav {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.68;
+}
+
+.contract-chip {
+  display: grid;
+  width: min(100%, 32rem);
+  min-height: 3.25rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.065);
+  padding: 0.8rem 1rem;
+  color: #d9c9b4;
+  font-family: var(--font-data);
+  font-size: 0.86rem;
+  transition: background-color 160ms ease;
+}
+.contract-chip:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+.contract-chip > :first-child,
+.contract-chip > :last-child {
+  color: #ffad3b;
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+
+.stats-strip {
+  display: grid;
+  grid-template-columns: 1fr;
+  overflow: hidden;
+}
+.stats-strip > div {
+  border-top: 1px solid color-mix(in srgb, var(--color-engrave) 13%, transparent);
+}
+.stats-strip > div:first-child {
+  border-top: 0;
+}
+
+.certificate-shell {
+  container-type: inline-size;
+}
+.certificate-grid {
+  display: grid;
+}
+.certificate-header {
+  display: grid;
+  align-items: start;
+  gap: 1rem;
+}
+.certificate-stamp {
+  width: max-content;
+  max-width: 100%;
+}
+.certificate-counterfoil {
+  padding-block: 2rem;
+  background-repeat: repeat-x;
+  background-position: left center;
+}
+.certificate-stamp-watermark {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: clamp(8rem, 28cqi, 13rem);
+  opacity: 0.1;
+  pointer-events: none;
+}
+.certificate-stamp-watermark img,
+.counterfoil-stamp img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.counterfoil-stamp {
+  width: min(100%, 9rem);
+  margin-inline: auto;
+  padding: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--color-engrave) 28%, transparent);
+  border-radius: 12px;
+  background: #080706;
+  box-shadow: 0 0.45rem 1.1rem rgb(0 0 0 / 0.18);
+}
+
+@container (min-width: 34rem) {
+  .certificate-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .certificate-stamp {
+    margin-top: 0.2rem;
+  }
+}
+
+@container (min-width: 58rem) {
+  .certificate-grid {
+    grid-template-columns: minmax(0, 1fr) 16rem;
+  }
+  .certificate-counterfoil {
+    padding-block: 3rem;
+    background-repeat: repeat-y;
+    background-position: center top;
+  }
+  .certificate-stamp-watermark {
+    right: 2.5rem;
+    bottom: 2.5rem;
+  }
+}
+
+.page-heading {
+  background:
+    radial-gradient(circle at 92% 24%, color-mix(in srgb, var(--color-engrave) 10%, transparent), transparent 26rem),
+    var(--color-paper);
+}
+
+.sort-chip {
+  border: 1px solid color-mix(in srgb, var(--color-engrave) 15%, transparent);
+  border-radius: 10px;
+  padding: 0.48rem 0.72rem;
+  color: var(--color-ink-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.sort-chip:hover {
+  border-color: color-mix(in srgb, var(--color-engrave) 35%, transparent);
+  color: var(--color-ink);
+}
+.sort-chip-active {
+  border-color: color-mix(in srgb, var(--color-engrave) 42%, transparent);
+  background: color-mix(in srgb, var(--color-engrave) 12%, transparent);
+  color: var(--color-engrave);
+}
+.table-heading {
+  color: var(--color-ink-soft);
+  font-family: var(--font-body);
+  font-size: 0.64rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dex-chart-frame {
+  height: clamp(24rem, 42vw, 32rem);
+  color-scheme: dark;
+}
+html[data-theme="light"] .dex-chart-frame {
+  color-scheme: light;
+}
+
+.footer-shell {
+  box-shadow: 0 24px 60px -42px rgb(0 0 0 / 0.85);
+}
+.footer-heading {
+  color: var(--color-ink);
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-ink-soft);
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+.footer-link:hover {
+  color: var(--color-engrave);
+}
+
+select option {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+@media (min-width: 640px) {
+  .stats-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .stats-strip > div,
+  .stats-strip > div:nth-child(odd) {
+    border-top: 0;
+    border-right: 1px solid color-mix(in srgb, var(--color-engrave) 13%, transparent);
+  }
+  .stats-strip > div:last-child {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 799px) {
+  .hero-art {
+    background-position: 68% center;
+  }
+  .hero-shade {
+    background: linear-gradient(90deg, rgb(5 5 4 / 0.97) 0%, rgb(5 5 4 / 0.86) 60%, rgb(5 5 4 / 0.34) 100%);
+  }
+}
+
+@media (max-width: 639px) {
+  .site-nav .site-shell {
+    flex-wrap: wrap;
+    gap: 0.45rem 0.75rem;
+    padding-block: 0.5rem;
+  }
+  .site-nav .nav-scroll {
+    order: 3;
+    flex: 0 0 100%;
+    gap: 0.35rem;
+  }
+  .site-nav .nav-link {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}
+
+@media (pointer: coarse) {
+  .brand-mark,
+  .nav-link,
+  .nav-market-link,
+  .theme-toggle,
+  .paper-lift button,
+  .footer-link {
+    min-height: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .ui-button {
+    transition: none;
   }
 }

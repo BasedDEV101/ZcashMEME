@@ -1,38 +1,63 @@
-# Surface: home (burn flow)
+# Surface: home
 
-Mode: Persuade (first viewport must earn the burn); the burn flow itself operates.
+Primary target: `web/src/App.tsx`
+
+Mode: Persuade in the first viewport; Operate through launch, burn, ranking, and verification.
 
 ## Direction contract
 
-**THESIS.** The NFT is a receipt for something provably destroyed. This surface refuses the category's
-arrangement — near-black ground, neon accent, glass cards, 3D coin, Connect Wallet top right — and refuses
-its literate opposite, the terminal. A burn is a cancellation, so the page is the cancellation document:
-the amount you destroyed, engraved, struck through, serialised, and checkable by anyone.
+**THESIS.** A burn becomes a permanent on-chain stamp. The home surface refuses both the centered white
+certificate and the generic neon trading page: proof is alive, market-aware, and immediately actionable.
 
-**OWN-WORLD.** Safety-paper cream ground (#f2ede1) carrying the whole surface, not a neutral behind cards.
-Engraved green (#1b3a2f) for structure and rule lines; stamp red (#d8455f) reserved exclusively for
-cancellation and irreversible action; near-black ink (#2a2724) for text. Guilloche line-work as a real
-rendered element, not an image. Components are document parts: ruled fields, counterfoil stubs with a
-perforation edge, a struck-through cancellation band, rubber-stamp marks that sit slightly off-angle and
-off-register. No cards, no glass, no gradients, no glow.
+**OWN-WORLD.** Near-black pixel night, molten orange and gold, perforated stamp geometry, compact
+Shadcn-style controls, and dense ledger tables. Dark is the default; the light option preserves the same
+semantic hierarchy. Space Grotesk carries interface language and Courier Prime carries chain data.
 
-**STORY.** A trader arrives holding a memecoin and understands within one screen: burning destroys it
-permanently, and the proof is an object with their number on it. They believe it because the page shows a
-real cancelled certificate from mainnet, not a promise. They connect, get an address (generated for them),
-read what cannot be undone, and burn.
+**STORY.** A trader sees live proof, checks market activity, launches or burns, and verifies the result
+without losing context. The page keeps irreversible-action warnings close to the relevant control and
+never substitutes aspiration for chain evidence.
 
-**FIRST VIEWPORT.** One certificate fills the screen, portrait on mobile, landscape on desktop, with real
-margins of cream around it. The amount burned is the largest element, set in engraved numerals, with
-CANCELLED struck across the face at a slight angle in stamp red. The serial reads as the NFT number. The
-primary action sits where a signature line belongs, at the foot of the document: a single ruled field and
-the Burn control. Nothing floats above the document; the page has no chrome bar.
+**FIRST VIEWPORT.** A wide asymmetric hero places live HTML copy, actions, burn totals, stamp count, and
+the copyable contract at left, with authored stamp-sunset art at right. Live network statistics sit
+directly below. The visual remains image-led without putting copy, contract data, or actions inside the
+raster.
 
-**FORM.** Certificate of Destruction — central-bank note cancellation and industrial destruction records.
-Position 1 of 7 on the ordered grounded list; chosen by the operator over the assigned roll (Fire Insurance
-Mark, position 7). Seed key 30167b54, direction scope, persuade mode. Raised by the hand it beat: from
-Movida Scene Magazine, the courage to let one element dominate the viewport at poster scale rather than
-sitting politely in a column; from Silk Colour Chords, colour owning whole regions rather than accenting a
-neutral ground.
+**FORM.** On-chain stamp terminal. Seed `ceb334bc`. A 94rem shell, 16px working panels, 10–12px controls,
+44px coarse-pointer targets, and restrained structural depth organize the surface. Perforations and the
+clipped stamp mark supply identity; orange signals action and proof rather than decorative neon.
 
-**FINISH:** unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict,
-DESIGN.md, and every shipping raster carrying its provenance.
+## Shipped behavior
+
+- Sticky navigation uses compact route controls plus icon-and-label DEX, Fomo, and X links. On mobile it
+  becomes two rows, keeping the primary routes fully visible.
+- The three-stat strip reports the flagship's current market cap, protocol burn volume, and tokens
+  launched through the pad. It never substitutes the leaderboard's highest cap for the flagship's own
+  live figure.
+- Home keeps the certificate proof and burn workflow side by side at wide sizes, then stacks them safely
+  on smaller screens.
+- The launchpad groups the working form with explicit fee, custody, and funding constraints.
+- The leaderboard is sortable by market cap, 24-hour volume, holder count, and launch time. Missing or
+  incomparable values sort last, while the live-market panel pairs a compact DexScreener chart with a
+  selected-token dossier.
+- Data tables scroll horizontally when needed; addresses, hashes, and amounts use tabular data type.
+- Burn and launch progress use accessible `status` live regions, errors use assertive `alert` behavior,
+  and completed launch content receives focus.
+- Reduced-motion preferences remove nonessential transitions and collapse the stamp strike to 1ms.
+
+## Raster provenance
+
+Every raster shipped by this surface is accounted for here:
+
+| Asset | Provenance | Use |
+|---|---|---|
+| `web/public/stamp-hero-v2.png` | Generated specifically for this redesign from the on-chain stamp terminal direction, seed `ceb334bc`; no external stock source. | Decorative right-side hero scene; all product copy and data remain live HTML. |
+| `web/public/fomo-eyes.png` | Supplied project asset; not generated as part of this redesign. | Small Fomo brand mark in the navigation and trade action. |
+| `web/public/dex-mark.png` | Supplied project asset; not generated as part of this redesign. | Small DEX brand mark in the navigation. |
+| `web/public/stamp-mark.png` | Supplied project stamp artwork; not generated or altered as part of this redesign. | Fully contained certificate watermark and counterfoil brand mark. |
+| `web/public/stamp-mark-transparent.png` | User-supplied transparent version of the project stamp artwork. | Navbar brand mark, flagship leaderboard avatar, live-market dossier, and counterfoil brand mark. |
+
+## Finish review
+
+**Disposition: SHIP.** The shipped surface matches the direction contract, carries light-theme parity,
+retains truthful live data and accessible status behavior, adapts navigation and tables for mobile, and
+records provenance for every shipping raster.

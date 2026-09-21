@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { GuillocheBand } from "./Guilloche.tsx";
 import { SearchField } from "./Field.tsx";
 import {
-  SOLSCAN, marketCap, marketCapUsd, short, toBigInt, tokens, when,
+  SOLSCAN, marketCap, marketCapUsd, money, short, toBigInt, when,
   type ActivityCollection, type Rates,
 } from "../lib/activity.ts";
+import { CONFIG } from "../lib/config.ts";
+import { useTokenDetails, type TokenDetail } from "../lib/tokenDetails.ts";
 
-type Sort = "burns" | "marketCap" | "destroyed" | "newest" | "oldest";
+type Sort = "marketCap" | "volume" | "holders" | "newest" | "oldest";
 
 const SORTS: { key: Sort; label: string; blurb: string }[] = [
-  { key: "burns", label: "Burns", blurb: "ranked by tokens destroyed for a certificate" },
   { key: "marketCap", label: "Market cap", blurb: "ranked by market cap" },
-  { key: "destroyed", label: "Supply gone", blurb: "ranked by every token destroyed, certificate or not" },
+  { key: "volume", label: "24h volume", blurb: "ranked by trading volume over the last 24 hours" },
+  { key: "holders", label: "Holders", blurb: "ranked by current holder count" },
   { key: "newest", label: "Newest", blurb: "most recently launched first" },
   { key: "oldest", label: "Oldest", blurb: "the register from its first entry" },
 ];
@@ -42,29 +43,33 @@ const PAGE = 20;
 /** Missing or unparseable sorts last, rather than throwing mid-render. */
 const big = (v: unknown): bigint => toBigInt(v) ?? -1n;
 
-function order(a: ActivityCollection, b: ActivityCollection, by: Sort, rates?: Rates): number {
+function order(
+  a: ActivityCollection,
+  b: ActivityCollection,
+  by: Sort,
+  rates: Rates | undefined,
+  details: Record<string, TokenDetail>,
+): number {
   switch (by) {
     case "marketCap": {
       // Ranked in dollars. Comparing the raw integers put a bigger ZEC coin
       // below a smaller SOL one: different currencies, different decimals,
       // not the same kind of number. A coin whose rate is unknown sorts last
       // rather than being given an invented value.
-      const x = marketCapUsd(a.marketCapQuote, a.quoteMint, rates) ?? -1;
-      const y = marketCapUsd(b.marketCapQuote, b.quoteMint, rates) ?? -1;
+      const x = marketCapUsd(a.marketCapQuote, a.quoteMint, rates, a.marketCapUsd) ?? -1;
+      const y = marketCapUsd(b.marketCapQuote, b.quoteMint, rates, b.marketCapUsd) ?? -1;
       return y - x;
     }
-    case "destroyed": {
-      const d = big(b.destroyedTokens) - big(a.destroyedTokens);
-      return d === 0n ? 0 : d > 0n ? 1 : -1;
-    }
+    case "volume":
+      return (b.volume24hUsd ?? -1) - (a.volume24hUsd ?? -1);
+    case "holders":
+      return (details[b.mint]?.holders ?? -1) - (details[a.mint]?.holders ?? -1);
     case "newest":
       return bySlot(a, b, -1);
     case "oldest":
       return bySlot(a, b, 1);
-    default: {
-      const d = (toBigInt(b.burnedTokens) ?? 0n) - (toBigInt(a.burnedTokens) ?? 0n);
-      return d === 0n ? (b.launchedAt ?? 0) - (a.launchedAt ?? 0) : d > 0n ? 1 : -1;
-    }
+    default:
+      return 0;
   }
 }
 
@@ -91,7 +96,7 @@ export function Leaderboard({ collections, loading, error, stale, rates }: {
   collections: ActivityCollection[]; loading: boolean; error: string | null;
   stale?: boolean; rates?: Rates;
 }) {
-  const [by, setBy] = useState<Sort>("burns");
+  const [by, setBy] = useState<Sort>("marketCap");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
 
@@ -102,8 +107,9 @@ export function Leaderboard({ collections, loading, error, stale, rates }: {
     .filter((c) => typeof c.slot === "number" && c.slot > 0)
     .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))[0]?.mint;
 
+  const details = useTokenDetails(collections.map((c) => c.mint));
   const found = collections.filter((c) => matches(c, query));
-  const ranked = [...found].sort((a, b) => order(a, b, by, rates));
+  const ranked = [...found].sort((a, b) => order(a, b, by, rates, details));
   // A search shows everything it found: hiding matches behind "show more"
   // makes the field feel broken.
   const searching = query.trim().length > 0;
@@ -112,31 +118,31 @@ export function Leaderboard({ collections, loading, error, stale, rates }: {
 
   return (
     <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <h2 className="font-display text-[1.7rem] leading-none text-engrave">The leaderboard</h2>
-        <p className="font-data text-xs text-ink-soft">{blurb}</p>
-      </div>
-      <div className="mt-5 text-engrave">
-        <GuillocheBand className="h-5 w-full" />
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+        <div>
+          <h2 className="font-display text-[2rem] leading-none font-semibold tracking-[-0.03em] text-ink sm:text-[2.6rem]">Leaderboard</h2>
+          <p className="mt-2 text-sm text-ink-soft">{blurb}</p>
+        </div>
+        <p className="font-data text-xs text-ink-soft">{collections.length.toLocaleString("en-US")} collections</p>
       </div>
 
-      <div className="mt-7 flex flex-col gap-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-8">
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
+      <div className="mt-7 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between xl:gap-8">
+        <div className="flex flex-wrap gap-2">
           {SORTS.map((s) => (
             <button
               key={s.key}
               type="button"
               onClick={() => setBy(s.key)}
               aria-pressed={by === s.key}
-              className={`font-body text-[0.66rem] font-semibold tracking-[0.16em] uppercase transition-colors ${
-                by === s.key ? "text-engrave underline underline-offset-[6px]" : "text-ink-soft hover:text-engrave"
+              className={`sort-chip ${
+                by === s.key ? "sort-chip-active" : ""
               }`}
             >
               {s.label}
             </button>
           ))}
         </div>
-        <div className="w-full sm:max-w-[22rem]">
+        <div className="w-full xl:max-w-[24rem]">
           <SearchField
             value={query}
             onChange={setQuery}
@@ -156,18 +162,32 @@ export function Leaderboard({ collections, loading, error, stale, rates }: {
       ) : shown.length === 0 ? (
         <Note>Nothing matches “{query.trim()}”. Try a ticker, a name, or a full contract address.</Note>
       ) : (
-        <ol className="mt-7">
-          {shown.map((c, i) => (
-            <Row
-              key={c.mint}
-              collection={c}
-              rank={searching ? null : i + 1}
-              by={by}
-              rates={rates}
-              first={c.mint === firstEntry}
-            />
-          ))}
-        </ol>
+        <div className="mt-7 overflow-x-auto rounded-xl bg-paper-deep/45">
+          <table className="w-full min-w-[52rem] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-engrave/15">
+                <th className="w-14 px-4 py-3 table-heading">Rank</th>
+                <th className="px-4 py-3 table-heading">Collection</th>
+                <SortableHeading label="Market cap" sort="marketCap" active={by} onSort={setBy} />
+                <SortableHeading label="Volume 24h" sort="volume" active={by} onSort={setBy} />
+                <SortableHeading label="Holders" sort="holders" active={by} onSort={setBy} />
+                <SortableHeading label="Launched" sort="newest" active={by} onSort={setBy} />
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((c, i) => (
+                <LeaderboardRow
+                  key={c.mint}
+                  collection={c}
+                  rank={searching ? null : i + 1}
+                  rates={rates}
+                  first={c.mint === firstEntry}
+                  detail={details[c.mint]}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {!searching && !expanded && ranked.length > PAGE && (
@@ -187,85 +207,87 @@ export function Leaderboard({ collections, loading, error, stale, rates }: {
       )}
 
       <p className="mt-6 max-w-[66ch] text-sm text-ink-soft">
-        Burns count only what passed the same rule the bridge uses — a real, finalised burn of that mint,
-        above its minimum, with one memo naming a Zcash address. Supply gone counts every token destroyed,
-        including burns that earned nothing. Market cap is read from wherever the coin actually trades.
+        Market cap and rolling 24-hour volume come from each coin’s most liquid indexed pair. Holder counts
+        are read from the live token register and may take a moment to appear after the table loads.
       </p>
     </section>
   );
 }
 
-function Row({ collection: c, rank, by, rates, first }: {
-  collection: ActivityCollection; rank: number | null; by: Sort; rates?: Rates; first?: boolean;
+function SortableHeading({ label, sort, active, onSort }: {
+  label: string;
+  sort: Sort;
+  active: Sort;
+  onSort: (sort: Sort) => void;
 }) {
   return (
-    // Flex, not a fixed grid: at 390px a four-column grid squeezed the middle
-    // until names truncated to "Zcash…" and the meta line wrapped four deep.
-    <li className="flex items-center gap-3 border-b border-engrave/12 py-3.5 first:border-t first:border-engrave/25 sm:gap-4">
-      <span className="tnum w-6 shrink-0 font-display text-[1.05rem] leading-none text-engrave/50 sm:w-8">
-        {rank === null ? "" : String(rank).padStart(2, "0")}
-      </span>
+    <th className="px-4 py-3 table-heading">
+      <button type="button" onClick={() => onSort(sort)} className={active === sort ? "text-engrave" : "hover:text-ink"}>
+        <span>{label}</span>
+        {active === sort && (
+          <svg viewBox="0 0 12 12" aria-hidden className="ml-1 inline size-3" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M6 2v7M3.5 6.5 6 9l2.5-2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+    </th>
+  );
+}
 
-      {c.image ? (
-        <img src={c.image} alt="" loading="lazy" className="h-10 w-10 shrink-0 border border-engrave/25 object-cover" />
+function LeaderboardRow({ collection: c, rank, rates, first, detail }: {
+  collection: ActivityCollection;
+  rank: number | null;
+  rates?: Rates;
+  first?: boolean;
+  detail?: TokenDetail;
+}) {
+  const image = c.mint === CONFIG.solanaMint ? "/stamp-mark-transparent.png" : c.image;
+  return (
+    <tr className="border-b border-engrave/10 transition-colors last:border-b-0 hover:bg-engrave/[0.045]">
+      <td className="tnum px-4 py-4 font-data text-xs text-ink-soft">{rank === null ? "—" : String(rank).padStart(2, "0")}</td>
+      <td className="px-4 py-4">
+        <div className="flex min-w-[15rem] items-center gap-3">
+      {image ? (
+            <img src={image} alt="" loading="lazy" className="size-10 shrink-0 rounded-lg object-cover" />
       ) : (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-engrave/25 font-display text-[0.8rem] text-engrave/55">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-engrave/10 font-display text-[0.8rem] font-semibold text-engrave">
           {String(c.symbol ?? "?").slice(0, 2)}
         </span>
       )}
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
           <a
             href={`${SOLSCAN}/token/${c.mint}`}
             target="_blank"
             rel="noreferrer"
-            className="font-display text-[1.05rem] leading-tight text-ink no-underline transition-colors hover:text-engrave hover:underline hover:underline-offset-4"
+                className="font-display text-base font-semibold text-ink no-underline hover:text-engrave"
           >
             {c.symbol}
           </a>
-          {c.name && <span className="truncate text-[0.85rem] text-ink-soft">{c.name}</span>}
           {first && (
-            <span className="shrink-0 border border-engrave/35 px-1.5 py-[1px] font-body text-[0.52rem] font-semibold tracking-[0.14em] text-engrave uppercase">
+                  <span className="rounded-full bg-engrave/10 px-2 py-0.5 text-[0.58rem] font-semibold tracking-[0.08em] text-engrave uppercase">
               First entry
             </span>
           )}
+            </div>
+            <p className="mt-0.5 max-w-48 truncate text-xs text-ink-soft">{c.name ?? short(c.mint, 5)}</p>
+          </div>
         </div>
-        <p className="tnum mt-0.5 truncate font-data text-[0.66rem] text-ink-soft">
-          {/* The address is the first thing to go when space is short: it is
-              the least readable part of the row and the ticker already links
-              to it. */}
-          <span className="hidden sm:inline">{short(c.mint, 5)} · </span>
-          {c.launchedAt && when(c.launchedAt)}
-          {c.burners > 0 && <> · {c.burners} burning</>}
-          {c.refusedCount > 0 && <> · {c.refusedCount} refused</>}
-        </p>
-      </div>
-
-      <div className="shrink-0 text-right">
-        <p className="tnum font-display text-[1.05rem] leading-none text-engrave sm:text-[1.15rem]">
-          {headline(c, by, rates)}
-        </p>
-        <p className="mt-1 font-body text-[0.55rem] tracking-[0.12em] text-ink-soft uppercase sm:text-[0.58rem] sm:tracking-[0.14em]">
-          {caption(c, by)}
-        </p>
-      </div>
-    </li>
+      </td>
+      <MetricCell value={marketCap(c.marketCapQuote, c.quoteMint, rates, c.marketCapUsd) ?? "—"} />
+      <MetricCell value={money(c.volume24hUsd ?? null) ?? "—"} />
+      <MetricCell value={detail?.holders?.toLocaleString("en-US") ?? "…"} />
+      <td className="tnum px-4 py-4 font-data text-xs whitespace-nowrap text-ink-soft">{when(c.launchedAt)}</td>
+    </tr>
   );
 }
 
-function headline(c: ActivityCollection, by: Sort, rates?: Rates): string {
-  if (by === "marketCap") return marketCap(c.marketCapQuote, c.quoteMint, rates) ?? "—";
-  if (by === "destroyed") return toBigInt(c.destroyedTokens) === null ? "—" : tokens(c.destroyedTokens);
-  if (by === "newest" || by === "oldest") return when(c.launchedAt);
-  return tokens(c.burnedTokens);
-}
-
-function caption(c: ActivityCollection, by: Sort): string {
-  if (by === "marketCap") return "market cap";
-  if (by === "destroyed") return "supply destroyed";
-  if (by === "newest" || by === "oldest") return "launched";
-  return c.burnCount === 1 ? "burned · 1 cert" : `burned · ${c.burnCount} certs`;
+function MetricCell({ value }: { value: string }) {
+  return (
+    <td className="tnum px-4 py-4 font-data text-sm whitespace-nowrap text-ink">
+      {value}
+    </td>
+  );
 }
 
 function Note({ children }: { children: React.ReactNode }) {

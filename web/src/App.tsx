@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { Certificate } from "./components/Certificate.tsx";
 import { BurnPanel } from "./components/BurnPanel.tsx";
-import { Guilloche, GuillocheBand } from "./components/Guilloche.tsx";
-import { CONFIG, PROOF, SOURCE_URL, X_URL, formatTokens } from "./lib/config.ts";
+import { GuillocheBand } from "./components/Guilloche.tsx";
+import { CONFIG, DEX_URL, FOMO_URL, PROOF, PUMP_URL, SOURCE_URL, X_URL, formatTokens } from "./lib/config.ts";
 import { CreateCoinPanel } from "./components/CreateCoinPanel.tsx";
 import { Registry } from "./components/Registry.tsx";
 import { ALLOWANCE_STAMPS, CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC, type Collection } from "./lib/launchpad.ts";
@@ -13,7 +13,7 @@ import { LatestCoins } from "./components/LatestCoins.tsx";
 import { MarketRecord } from "./components/MarketRecord.tsx";
 import { NewVersion } from "./components/NewVersion.tsx";
 import { Boundary } from "./components/Boundary.tsx";
-import { toBigInt, useActivity } from "./lib/activity.ts";
+import { marketCap, money, toBigInt, tokens, useActivity } from "./lib/activity.ts";
 
 export default function App() {
   const wallets = useMemo(() => [], []);
@@ -27,6 +27,10 @@ export default function App() {
 }
 
 function Page() {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    if (typeof window === "undefined") return "dark";
+    return window.localStorage.getItem("stamp-theme") === "light" ? "light" : "dark";
+  });
   // The register lives on Zcash; the browser cannot speak lightwalletd's gRPC,
   // so the site reads a snapshot the operator exports from chain.
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -42,6 +46,12 @@ function Page() {
   const stale = data?.stale ?? false;
   const rates = data?.rates;
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem("stamp-theme", theme);
+  }, [theme]);
+
   // The hero used to print one certificate -- 1,500,000 of a single coin --
   // which read as the pad's whole output rather than as the one example it
   // was. It now totals every burn the register knows about.
@@ -56,6 +66,10 @@ function Page() {
     },
     { destroyed: 0n, certificates: 0, coins: 0 },
   );
+  const flagship = (data?.collections ?? []).find((collection) => collection.mint === CONFIG.solanaMint);
+  const currentMarketCap = money(data?.currentMarketCapUsd ?? null)
+    ?? (flagship ? marketCap(flagship.marketCapQuote, flagship.quoteMint, rates) : null)
+    ?? "Unavailable";
 
   useEffect(() => {
     fetch("/collections.json")
@@ -78,16 +92,15 @@ function Page() {
 
   if (route.startsWith("/leaderboard") || route.startsWith("/burns")) {
     return (
-      <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
-        <main className="mx-auto w-full max-w-5xl space-y-6">
-          <Nav route={route} go={go} />
+      <div className="site-bg min-h-dvh">
+        <Nav route={route} go={go} theme={theme} setTheme={setTheme} />
+        <main className="site-shell space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
           <NewVersion />
-          <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
-            <h1 className="font-display text-[1.9rem] leading-none text-engrave sm:text-[2.4rem]">
-              What the pad has done
-            </h1>
-            <div className="mt-5 text-engrave">
-              <GuillocheBand className="h-5 w-full" />
+          <section className="page-heading paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12 lg:px-14">
+            <div className="max-w-4xl">
+              <h1 className="font-display text-[2.25rem] leading-[1.02] font-semibold tracking-[-0.03em] text-ink sm:text-[3.5rem]">
+                The network, ranked.
+              </h1>
             </div>
             <p className="mt-7 max-w-[64ch] text-[0.98rem] leading-relaxed text-ink-soft">
               Every coin launched here since the register opened, and every burn against one. Both are
@@ -96,11 +109,17 @@ function Page() {
               listed; everything here was made on the pad.
             </p>
           </section>
+          <StatsStrip
+            loading={loading}
+            destroyed={totals.destroyed}
+            collections={data?.collections.length ?? 0}
+            currentMarketCap={currentMarketCap}
+          />
           <Boundary what="launch list">
             <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={8} rates={rates} />
           </Boundary>
           <Boundary what="market record">
-            <MarketRecord collections={data?.collections ?? []} loading={loading} error={error} rates={rates} />
+            <MarketRecord collections={data?.collections ?? []} loading={loading} error={error} rates={rates} theme={theme} />
           </Boundary>
           <Boundary what="leaderboard">
             <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} rates={rates} />
@@ -116,25 +135,22 @@ function Page() {
 
   if (route.startsWith("/launch")) {
     return (
-      <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
-        <main className="mx-auto w-full max-w-5xl space-y-6">
-          <Nav route={route} go={go} />
+      <div className="site-bg min-h-dvh">
+        <Nav route={route} go={go} theme={theme} setTheme={setTheme} />
+        <main className="site-shell space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
           <NewVersion />
-          <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
-            <h1 className="font-display text-[1.9rem] leading-none text-engrave sm:text-[2.4rem]">
-              Launch a coin
+          <section className="page-heading paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12 lg:px-14">
+            <h1 className="max-w-4xl font-display text-[2.25rem] leading-[1.02] font-semibold tracking-[-0.03em] text-ink sm:text-[3.5rem]">
+              Launch on Solana. Register on Zcash.
             </h1>
-            <div className="mt-5 text-engrave">
-              <GuillocheBand className="h-5 w-full" />
-            </div>
             <p className="mt-7 max-w-[64ch] text-[0.98rem] leading-relaxed text-ink-soft">
               Create a coin on pump.fun and its collection is registered on Zcash in the same breath. Its
               holders can then burn and receive a certificate cut with the exact amount they destroyed —
               the same mechanism {CONFIG.ticker} uses, with no special treatment for ours.
             </p>
-            <div className="mt-8 grid gap-10 lg:grid-cols-[1.15fr_1fr]">
-              <Boundary what="launch form"><CreateCoinPanel /></Boundary>
-              <aside className="space-y-6 border-t border-engrave/20 pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+            <div className="mt-10 grid gap-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
+              <div className="rounded-2xl bg-paper-deep/55 p-5 sm:p-7"><Boundary what="launch form"><CreateCoinPanel /></Boundary></div>
+              <aside className="space-y-6 rounded-2xl bg-paper-deep/55 p-5 sm:p-7">
                 <h3 className="font-display text-xl text-engrave">How it works</h3>
                 <Warning title="One signature does everything">
                   It creates the coin on pump.fun, routes its creator fee, pays the {LAUNCH_FEE_SOL} SOL
@@ -148,10 +164,6 @@ function Page() {
                   pay for it, and own every token you buy; nothing about the coin is held by us. If you
                   want the creator fee yourself, launch on pump.fun directly instead.
                 </Warning>
-                <Warning title="Mayhem mode is off">
-                  It would double the supply and let pump's agent burn tokens on its own — burns nobody
-                  authorised, which would issue stamps and wreck your collection's accounting.
-                </Warning>
                 <Warning title="Your stamps are already paid for">
                   Each stamp costs about {STAMP_COST_ZEC} ZEC to inscribe, and your {LAUNCH_FEE_SOL} SOL
                   covers the first {ALLOWANCE_STAMPS.toLocaleString("en-US")}. Your collection is topped
@@ -164,13 +176,15 @@ function Page() {
                   Burning destroys them on Solana. There is no escrow, no vault and no custody — for you
                   or for us.
                 </Warning>
-                <Warning title="It is not private yet">
-                  Zcash cannot hold shielded assets today. Stamps are public inscriptions, and convert
-                  when shielded assets activate. Do not promise your holders otherwise.
-                </Warning>
               </aside>
             </div>
           </section>
+          <StatsStrip
+            loading={loading}
+            destroyed={totals.destroyed}
+            collections={data?.collections.length ?? 0}
+            currentMarketCap={currentMarketCap}
+          />
 
           <Boundary what="launch list">
             <LatestCoins
@@ -191,10 +205,19 @@ function Page() {
   }
 
   return (
-    <div className="min-h-dvh bg-paper-deep px-4 py-6 sm:px-6 sm:py-10">
-      <main className="mx-auto w-full max-w-5xl space-y-6">
-        <Nav route={route} go={go} />
+    <div className="site-bg min-h-dvh">
+      <Nav route={route} go={go} theme={theme} setTheme={setTheme} />
+      <main className="site-shell space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
         <NewVersion />
+        <Hero go={go} loading={loading} destroyed={totals.destroyed} certificates={totals.certificates} />
+        <StatsStrip
+          loading={loading}
+          destroyed={totals.destroyed}
+          collections={data?.collections.length ?? 0}
+          currentMarketCap={currentMarketCap}
+        />
+
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(34rem,1.1fr)]">
         <Certificate
           serial={String(totals.certificates).padStart(6, "0")}
           amount={loading ? "—" : formatTokens(totals.destroyed)}
@@ -229,8 +252,8 @@ function Page() {
           </div>
         </Certificate>
 
-        <section id="burn" className="paper-lift scroll-mt-6 bg-paper px-6 py-9 sm:px-10 sm:py-12">
-          <div className="grid gap-10 lg:grid-cols-[1.15fr_1fr]">
+        <section id="burn" className="paper-lift scroll-mt-28 bg-paper px-6 py-9 sm:px-10 sm:py-12">
+          <div className="grid gap-10 2xl:grid-cols-[1.15fr_0.85fr]">
             <div>
               <h2 className="font-display text-[1.7rem] leading-none text-engrave">Issue a certificate</h2>
               <div className="mt-5 text-engrave">
@@ -249,10 +272,6 @@ function Page() {
                 An exchange ZEC deposit address is a valid t1 address. The certificate would be delivered
                 to it and lost for good. Use a wallet you hold the keys to.
               </Warning>
-              <Warning title="Holdings on Zcash are public today">
-                Zcash cannot hold private assets yet. When it can, each certificate converts to that many
-                shielded tokens. Until then, anyone can see who holds what.
-              </Warning>
               <Warning title="There is no market yet">
                 No exchange, no pool, no floor price. A certificate is worth what someone will pay for it,
                 and today that means selling privately.
@@ -260,6 +279,7 @@ function Page() {
             </aside>
           </div>
         </section>
+        </div>
 
         <Boundary what="launch list">
           <LatestCoins
@@ -282,8 +302,6 @@ function Page() {
           />
         </Boundary>
 
-        <WhyAStamp />
-
         <Proof />
         <Footer />
       </main>
@@ -291,63 +309,210 @@ function Page() {
   );
 }
 
-function Nav({ route, go }: { route: string; go: (p: string) => void }) {
+function Hero({ go, loading, destroyed, certificates }: {
+  go: (path: string) => void;
+  loading: boolean;
+  destroyed: bigint;
+  certificates: number;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copyContract = async () => {
+    if (!CONFIG.solanaMint) return;
+    await navigator.clipboard.writeText(CONFIG.solanaMint);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  return (
+    <section className="hero-surface relative isolate overflow-hidden rounded-2xl">
+      <div className="hero-art absolute inset-0" aria-hidden />
+      <div className="hero-shade absolute inset-0" aria-hidden />
+      <div className="relative grid min-h-[36rem] items-end px-6 py-8 sm:px-10 sm:py-12 lg:min-h-[42rem] lg:grid-cols-[minmax(0,0.9fr)_minmax(24rem,1.1fr)] lg:px-14 lg:py-14">
+        <div className="max-w-3xl">
+          <h1 className="text-balance font-display text-[clamp(3rem,7.5vw,6rem)] leading-[0.9] font-semibold tracking-[-0.04em] text-white">
+            Burn the token.<br />Keep the proof.
+          </h1>
+          <p className="mt-6 max-w-[62ch] text-base leading-relaxed text-[#eadbc6] sm:text-lg">
+            Destroy {CONFIG.ticker} on Solana and receive a permanent Zcash stamp cut with the exact
+            amount you burned. One-way, verifiable, and held by nobody but you.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a href="#burn" className="ui-button ui-button-primary no-underline">Burn {CONFIG.ticker}</a>
+            <button type="button" onClick={() => go("/launch")} className="ui-button ui-button-secondary">
+              Launch a coin
+            </button>
+            <a href={FOMO_URL} target="_blank" rel="noreferrer" className="ui-button ui-button-ghost no-underline">
+              Trade on Fomo <FomoMark className="fomo-eyes" />
+            </a>
+          </div>
+          <div className="mt-8 flex max-w-2xl flex-col items-start gap-3 border-t border-white/15 pt-5">
+            <p className="font-data text-xs text-[#c9b79f]">
+              {loading ? "Reading both chains…" : `${tokens(destroyed)} burned · ${certificates.toLocaleString("en-US")} stamps`}
+            </p>
+            <button type="button" onClick={copyContract} className="contract-chip" aria-label="Copy contract address">
+              <span>CA</span>
+              <span className="truncate">{CONFIG.solanaMint}</span>
+              <span>{copied ? "Copied" : "Copy"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatsStrip({ loading, destroyed, collections, currentMarketCap }: {
+  loading: boolean;
+  destroyed: bigint;
+  collections: number;
+  currentMarketCap: string;
+}) {
+  const stats = [
+    ["Current market cap", loading ? "—" : currentMarketCap],
+    ["Burn volume", loading ? "—" : tokens(destroyed)],
+    ["Tokens launched", loading ? "—" : collections.toLocaleString("en-US")],
+  ];
+  return (
+    <section className="stats-strip paper-lift bg-paper" aria-label="Live network statistics">
+      {stats.map(([label, value]) => (
+        <div key={label} className="min-w-0 px-5 py-5 sm:px-6">
+          <p className="font-body text-[0.68rem] font-semibold tracking-[0.12em] text-ink-soft uppercase">{label}</p>
+          <p className="tnum mt-1 break-words font-display text-[1.35rem] leading-tight font-semibold tracking-[-0.025em] text-ink sm:text-[1.55rem]">
+            {value}
+          </p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function Nav({ route, go, theme, setTheme }: {
+  route: string;
+  go: (p: string) => void;
+  theme: "dark" | "light";
+  setTheme: (theme: "dark" | "light") => void;
+}) {
   const here = route.startsWith("/launch")
     ? "/launch"
     : route.startsWith("/leaderboard") || route.startsWith("/burns")
       ? "/leaderboard"
       : "/";
   return (
-    <nav className="flex flex-wrap items-baseline gap-x-6 gap-y-2 px-2">
-      {[["/", "Burn"], ["/launch", "Launch a coin"], ["/leaderboard", "Leaderboard"]].map(([path, label]) => (
-        <button
-          key={path}
-          type="button"
-          onClick={() => go(path)}
-          className={`font-body text-[0.68rem] font-semibold tracking-[0.18em] uppercase transition-colors ${
-            here === path ? "text-engrave underline underline-offset-[6px]" : "text-ink-soft hover:text-engrave"
-          }`}
-        >
-          {label}
+    <nav className="site-nav sticky top-0 z-50">
+      <div className="site-shell flex min-h-16 items-center gap-5 px-4 sm:px-6 lg:px-8">
+        <button type="button" onClick={() => go("/")} className="brand-mark shrink-0" aria-label="Zcash Shielded Assets home">
+          <img src="/stamp-mark-transparent.png" alt="" width="1254" height="1254" className="brand-stamp" />
+          <span className="font-display text-sm font-semibold tracking-[-0.02em] text-ink sm:text-base">STAMP</span>
         </button>
-      ))}
-      <a
-        href={X_URL}
-        target="_blank"
-        rel="noreferrer"
-        className="font-body text-[0.68rem] font-semibold tracking-[0.18em] text-ink-soft uppercase no-underline transition-colors hover:text-engrave"
-      >
-        Follow
-      </a>
+        <div className="nav-scroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {[["/", "Burn"], ["/launch", "Launchpad"], ["/leaderboard", "Leaderboard"]].map(([path, label]) => (
+            <button
+              key={path}
+              type="button"
+              onClick={() => go(path)}
+              aria-current={here === path ? "page" : undefined}
+              className={`nav-link ${here === path ? "nav-link-active" : ""}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="hidden items-center gap-2 md:flex">
+          <a href={DEX_URL} target="_blank" rel="noreferrer" className="nav-market-link no-underline">
+            <img src="/dex-mark.png" alt="" aria-hidden className="dex-mark" />
+            <span>DEX</span>
+          </a>
+          <a href={FOMO_URL} target="_blank" rel="noreferrer" className="nav-market-link no-underline">
+            <FomoMark className="fomo-eyes fomo-eyes-nav" />
+            <span>Fomo</span>
+          </a>
+          <a href={X_URL} target="_blank" rel="noreferrer" className="nav-market-link no-underline">
+            <XMark />
+            <span>X</span>
+          </a>
+        </div>
+        <button
+          type="button"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="theme-toggle shrink-0"
+          aria-label={`Use ${theme === "dark" ? "light" : "dark"} theme`}
+        >
+          <ThemeIcon theme={theme} />
+        </button>
+      </div>
     </nav>
+  );
+}
+
+function FomoMark({ className }: { className?: string }) {
+  return <img src="/fomo-eyes.png" alt="" aria-hidden className={className} />;
+}
+
+function XMark() {
+  return (
+    <svg viewBox="0 0 18 18" aria-hidden className="nav-market-icon" fill="currentColor">
+      <path d="M3.2 2.5h3.3l3.1 4.15 3.62-4.15h1.55L10.32 7.6l4.48 5.9h-3.3L8.12 9.04 4.22 13.5H2.68l4.72-5.4L3.2 2.5Zm2.45 1.12 6.4 8.76h1.1L6.75 3.62h-1.1Z" />
+    </svg>
+  );
+}
+
+function ExternalIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M6 3h7v7M13 3 5.5 10.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11 8.5V13H3V5h4.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ThemeIcon({ theme }: { theme: "dark" | "light" }) {
+  return theme === "dark" ? (
+    <svg viewBox="0 0 20 20" aria-hidden className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="10" cy="10" r="3.25" />
+      <path d="M10 1.5v2M10 16.5v2M1.5 10h2M16.5 10h2M4 4l1.4 1.4M14.6 14.6 16 16M16 4l-1.4 1.4M5.4 14.6 4 16" strokeLinecap="round" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 20 20" aria-hidden className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M16.7 12.3A7 7 0 0 1 7.7 3.3 7 7 0 1 0 16.7 12.3Z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
 function Footer() {
   return (
-    <footer className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-4 px-2 py-8 text-sm text-ink-soft">
-      <p className="max-w-[72ch]">
-        ${CONFIG.ticker} takes its name from Zcash Shielded Assets, the protocol feature specified in ZIP
-        227. It is an independent project: not affiliated with, endorsed by, or issued by the Zcash
-        Foundation or Electric Coin Co., and not the shielded asset the specification describes.
-      </p>
-      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-        <a
-          href={X_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="font-body text-[0.68rem] font-semibold tracking-[0.18em] text-engrave uppercase no-underline hover:underline hover:underline-offset-[6px]"
-        >
-          @Zip227
-        </a>
-        <a
-          href={SOURCE_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="font-body text-[0.68rem] font-semibold tracking-[0.18em] text-engrave uppercase no-underline hover:underline hover:underline-offset-[6px]"
-        >
-          Source on GitHub
-        </a>
+    <footer className="footer-shell mt-10 rounded-2xl bg-paper px-6 py-9 sm:px-10 sm:py-12">
+      <div className="grid gap-10 lg:grid-cols-[1.4fr_0.6fr_0.6fr]">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <img src="/stamp-mark-transparent.png" alt="" width="1254" height="1254" className="footer-stamp" />
+            <p className="font-display text-xl font-semibold tracking-[-0.025em] text-ink">Zcash Shielded Assets</p>
+          </div>
+          <p className="mt-4 max-w-[66ch] text-sm leading-relaxed text-ink-soft">
+            ${CONFIG.ticker} takes its name from the protocol feature specified in ZIP 227. It is an
+            independent project: not affiliated with, endorsed by, or issued by the Zcash Foundation or
+            Electric Coin Co., and not the shielded asset the specification describes.
+          </p>
+          <p className="tnum mt-5 max-w-[66ch] truncate font-data text-xs text-ink-soft">CA · {CONFIG.solanaMint}</p>
+        </div>
+        <div>
+          <p className="footer-heading">Market</p>
+          <div className="mt-4 flex flex-col items-start gap-3">
+            <a href={FOMO_URL} target="_blank" rel="noreferrer" className="footer-link">Fomo <ExternalIcon /></a>
+            <a href={DEX_URL} target="_blank" rel="noreferrer" className="footer-link">DexScreener <ExternalIcon /></a>
+            <a href={PUMP_URL} target="_blank" rel="noreferrer" className="footer-link">pump.fun <ExternalIcon /></a>
+          </div>
+        </div>
+        <div>
+          <p className="footer-heading">Project</p>
+          <div className="mt-4 flex flex-col items-start gap-3">
+            <a href={X_URL} target="_blank" rel="noreferrer" className="footer-link">X / @Zip227 <ExternalIcon /></a>
+            <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="footer-link">Source <ExternalIcon /></a>
+          </div>
+        </div>
+      </div>
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-engrave/15 pt-5 font-data text-[0.68rem] text-ink-soft">
+        <span>One-way burn · No escrow · Public on-chain proof</span>
+        <span>Mainnet</span>
       </div>
     </footer>
   );
@@ -368,7 +533,9 @@ function Counterfoil({ certificates }: { certificates: number | null }) {
           <Row label="Held by us" value="Nothing" />
         </dl>
       </div>
-      <Guilloche size={140} opacity={0.42} className="self-center text-engrave" />
+      <div className="counterfoil-stamp" aria-hidden="true">
+        <img src="/stamp-mark-transparent.png" alt="" width="1254" height="1254" />
+      </div>
     </div>
   );
 }
@@ -387,50 +554,6 @@ function Warning({ title, children }: { title: string; children: React.ReactNode
     <div>
       <h4 className="font-body text-[0.95rem] font-semibold text-ink">{title}</h4>
       <p className="mt-1 text-[0.9rem] leading-relaxed text-ink-soft">{children}</p>
-    </div>
-  );
-}
-
-function WhyAStamp() {
-  return (
-    <section className="paper-lift bg-paper px-6 py-9 sm:px-10 sm:py-12">
-      <h2 className="font-display text-[1.7rem] leading-none text-engrave">Why a stamp, and not a token</h2>
-      <div className="mt-5 text-engrave">
-        <GuillocheBand className="h-5 w-full" />
-      </div>
-
-      <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-2">
-        <Clause title="Zcash cannot hold assets yet">
-          Shielded assets are specified — ZIP 226 and ZIP 227 — but they are drafts. They are not on
-          mainnet, and the next network upgrade does not include the transaction format they need.
-        </Clause>
-        <Clause title="Zcash can hold inscriptions today">
-          An inscription needs no new consensus rules. It is an ordinary transparent transaction carrying
-          data, which Zcash has accepted since the beginning. Around 113,000 already exist on mainnet.
-        </Clause>
-        <Clause title="So the stamp is the asset, in the only form Zcash accepts today">
-          Not a placeholder image. A record of one specific destruction, written to the chain the asset
-          will eventually live on.
-        </Clause>
-        <Clause title="Uniqueness is doing real work">
-          Each stamp maps to exactly one burn and can be claimed once. A balance cannot say that this
-          destruction happened, on this date, for this amount, to this person. Only a unique record can.
-        </Clause>
-      </div>
-
-      <p className="mt-10 max-w-[64ch] border-t border-engrave/25 pt-6 font-display text-[1.2rem] leading-snug text-ink sm:text-[1.4rem]">
-        When shielded assets activate, each stamp converts to the amount cut into it. The stamp is the
-        claim that survives until then.
-      </p>
-    </section>
-  );
-}
-
-function Clause({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h3 className="font-display text-[1.15rem] leading-snug text-ink">{title}</h3>
-      <p className="mt-2 max-w-[58ch] text-[0.92rem] leading-relaxed text-ink-soft">{children}</p>
     </div>
   );
 }
