@@ -47,9 +47,14 @@ export function NewVersion() {
     const timer = setInterval(check, CHECK_EVERY_MS);
     // Checked on return too: a tab left in the background for hours is exactly
     // the one most likely to be out of date.
+    // On document, which is where visibilitychange is dispatched.
     const onVisible = () => document.visibilityState === "visible" && check();
-    addEventListener("visibilitychange", onVisible);
-    return () => { live = false; clearInterval(timer); removeEventListener("visibilitychange", onVisible); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   if (!stale) return null;
