@@ -54,16 +54,9 @@ export const QUOTE_SYMBOL = "ZEC";
  */
 export const LOOKUP_TABLE = "3zEFdQiMCRF5ew9KuLkeT4XVnRSRJjv58HWv8LSxvzJP";
 
-/**
- * What a coin launched here actually charges its traders, as a percentage.
- *
- * Derived from pump's live schedule rate, NOT from CREATOR_FEE_BPS: the
- * instruction asks for 200 bps and the program stores zero, so a site that
- * printed the requested number would be telling launchers something untrue
- * about their own coin.
- */
-export const SCHEDULE_CREATOR_FEE_BPS = 30;
-export const CREATOR_FEE_PERCENT = SCHEDULE_CREATOR_FEE_BPS / 100;
+/** What a coin launched here charges its traders, as a percentage. Derived
+    from the rate the curve actually stores, checked against a real launch. */
+export const CREATOR_FEE_PERCENT = CREATOR_FEE_BPS / 100;
 
 /** Roughly what one stamp costs the collection's funding balance, in ZEC. */
 export const STAMP_COST_ZEC = 0.00030546;

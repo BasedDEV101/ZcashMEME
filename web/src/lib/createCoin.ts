@@ -7,7 +7,10 @@ import { encodeDeployRequest } from "@protocol/core/deploy-request.ts";
 import { MEMO_V3 } from "@protocol/solana/programs.ts";
 import { assertNotForbidden } from "@protocol/core/forbidden.ts";
 import BN from "bn.js";
-import { CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, LOOKUP_TABLE, OPERATOR_ADDRESS } from "./launchpad.ts";
+import {
+  CREATOR_FEE_BPS, LAUNCH_FEE_LAMPORTS, LOOKUP_TABLE, OPERATOR_ADDRESS,
+  QUOTE_MINT, QUOTE_TOKEN_PROGRAM,
+} from "./launchpad.ts";
 
 export interface CoinDetails {
   name: string;
@@ -79,14 +82,19 @@ export async function buildLaunch(
     // The launcher creates the coin and is its creator on pump.fun. The
     // creator FEE is redirected to the pad by the fee-sharing config below --
     // the coin is still theirs, and it is not launched from our wallet.
-    creator: payer,
     user: payer,
+    // The pad is the creator, so pump routes the creator fee to it natively.
+    // This is also what makes ZEC pairing possible at all: the alternative --
+    // launcher as creator plus a fee-sharing config -- cannot be set up at
+    // launch for a non-SOL coin, because updateFeeSharesV2 distributes
+    // existing fees first and a coin that has never traded has none.
+    // The launcher still signs, still pays and still creates the coin.
+    creator: new PublicKey(OPERATOR_ADDRESS),
+    // Asked for, though pump does not currently grant it: the program stores
+    // zero and coins charge the schedule rate. Costs nothing to keep asking.
     creatorFeeBps: new BN(CREATOR_FEE_BPS),
-    // ZEC pairing is OFF. create_v2 accepts the ZEC quote happily -- that part
-    // simulates clean -- but updateFeeSharesV2 then fails the whole
-    // transaction with InvalidAccountData out of DistributeCreatorFeesV2, so
-    // no coin gets created at all. Shipped and reverted 2026-09-21; see
-    // QUOTE_MINT for what still needs solving before it can go back on.
+    quoteMint: new PublicKey(QUOTE_MINT),
+    quoteTokenProgram: new PublicKey(QUOTE_TOKEN_PROGRAM),
     // Never on. Mayhem doubles the supply to 2B and lets pump's agent burn
     // tokens on its own -- burns nobody authorised, which would mint stamps
     // and wreck the collection's accounting.
@@ -97,19 +105,6 @@ export async function buildLaunch(
     fromPubkey: payer,
     toPubkey: new PublicKey(OPERATOR_ADDRESS),
     lamports: Number(LAUNCH_FEE_LAMPORTS),
-  });
-
-  // Route that creator fee to the pad. Two instructions: the config exists
-  // first, then its shares are set. `pool: null` because a coin being created
-  // has no pool yet -- it starts on a bonding curve. The launcher signs these,
-  // because the config's authority is the coin's creator, which is them.
-  const operator = new PublicKey(OPERATOR_ADDRESS);
-  const sharingConfig = await sdk.createFeeSharingConfig({ creator: payer, mint: mint.publicKey, pool: null });
-  const shares = await sdk.updateFeeShares({
-    authority: payer,
-    mint: mint.publicKey,
-    currentShareholders: [payer],
-    newShareholders: [{ address: operator, shareBps: 10_000 }],
   });
 
   const register = new TransactionInstruction({
@@ -131,7 +126,7 @@ export async function buildLaunch(
   const message = new TransactionMessage({
     payerKey: payer,
     recentBlockhash: blockhash,
-    instructions: [create, sharingConfig, shares, fee, register],
+    instructions: [create, fee, register],
   }).compileToV0Message([lookup.value]);
 
   const transaction = new VersionedTransaction(message);

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.2.0",
     "@types/node": "^26.6.2",
     "typescript": "^7.0.2"
   },
@@ -20,11 +21,11 @@
     "@grpc/proto-loader": "^0.8.1",
     "@noble/hashes": "^1.8.0",
     "@noble/secp256k1": "^2.3.0",
+    "@pump-fun/pump-sdk": "^2.0.0",
     "@scure/bip32": "^2.4.0",
     "@scure/bip39": "^2.4.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.99.0",
-    "@vercel/blob": "^2.8.0",
-    "@pump-fun/pump-sdk": "^2.0.0"
+    "@vercel/blob": "^2.8.0"
   }
 }
