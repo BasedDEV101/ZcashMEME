@@ -1,6 +1,6 @@
 // Fee terms and the flagship collection, shared by the data endpoints.
 // Keep in step with web/src/lib/launchpad.ts and web/src/lib/config.ts.
-export const LAUNCH_FEE_LAMPORTS = 500_000_000n;
+export const LAUNCH_FEE_LAMPORTS = 250_000_000n;
 
 /**
  * The least a launch may have paid and still be listed.

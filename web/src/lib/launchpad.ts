@@ -8,7 +8,7 @@ import { assertNotForbidden } from "@protocol/core/forbidden.ts";
  * Deliberately small: the pad earns from pump.fun's creator fees on every
  * trade, so the launch fee is not the business model. It exists to make
  * spamming the register cost something. */
-export const LAUNCH_FEE_SOL = 0.5;
+export const LAUNCH_FEE_SOL = 0.25;
 export const LAUNCH_FEE_LAMPORTS = BigInt(Math.round(LAUNCH_FEE_SOL * 1e9));
 
 /** Fees land here. Change this to move launch revenue to a different wallet. */
