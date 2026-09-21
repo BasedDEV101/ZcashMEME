@@ -309,9 +309,12 @@ export async function readCurves(
 
   const fetchAll = async (addresses: string[]) => {
     const acc: ({ data: [string, string] } | null)[] = [];
-    for (let i = 0; i < addresses.length; i += 50) {
+    // 100 is getMultipleAccounts' own limit. The 50 here was sized for
+    // jsonParsed responses; a base64 account is small enough to take the max,
+    // which halves the calls a rebuild spends on a growing pad.
+    for (let i = 0; i < addresses.length; i += 100) {
       const res = await r.call<{ value: ({ data: [string, string] } | null)[] }>(
-        "getMultipleAccounts", [addresses.slice(i, i + 50), { encoding: "base64", commitment: "finalized" }]);
+        "getMultipleAccounts", [addresses.slice(i, i + 100), { encoding: "base64", commitment: "finalized" }]);
       acc.push(...res.value);
     }
     return acc;
@@ -394,8 +397,8 @@ function decodeMint(data: Buffer): { decimals: number; supply: string } | null {
  */
 export async function readMints(r: SolanaRpc, mints: string[]): Promise<Map<string, MintInfo>> {
   const out = new Map<string, MintInfo>();
-  for (let i = 0; i < mints.length; i += 50) {
-    const slice = mints.slice(i, i + 50);
+  for (let i = 0; i < mints.length; i += 100) {
+    const slice = mints.slice(i, i + 100);
     const res = await r.call<{ value: ({ owner: string; data: [string, string] } | null)[] }>(
       "getMultipleAccounts", [slice, { encoding: "base64", commitment: "finalized" }]);
     res.value.forEach((acc, j) => {
