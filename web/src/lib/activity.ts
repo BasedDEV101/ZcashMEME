@@ -20,6 +20,7 @@ export interface ActivityCollection {
   quoteMint: string | null;
   createdHere?: boolean;
   slot?: number;
+  pricedAt?: number | null;
 }
 
 export interface ActivityBurn {

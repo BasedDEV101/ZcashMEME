@@ -32,6 +32,7 @@ const BURN_PAGES = 2;      // per mint, newest first; older burns come from the 
 const WIDTH = 5;           // concurrent RPC streams
 const MAX_FETCH = 160;     // transactions per request, across all mints
 const MAX_BURN_ROWS = 300;
+const PRICE_BATCH = 40;    // coins re-priced per rebuild, oldest price first
 
 export interface Burn {
   signature: string; mint: string; symbol: string; slot: number; blockTime: number | null;
@@ -59,6 +60,8 @@ export interface Collection {
       number to give, with the quote it is denominated in. */
   marketCapQuote: string | null;
   quoteMint: string | null;
+  /** When this row was last priced, so refreshing can rotate. */
+  pricedAt: number | null;
   /** Raw supply and owning program, read from chain; pricing needs both. */
   supplyRaw: string | null;
   tokenProgramId: string | null;
@@ -126,7 +129,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       minWholeTokens: FLAGSHIP.minWholeTokens, signature: null, initialSupply: null,
       launchedAt: FLAGSHIP.launchedAt, launchedBy: null, decimals: 6,
       burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
-      destroyedTokens: null, marketCapQuote: null, quoteMint: null,
+      destroyedTokens: null, marketCapQuote: null, quoteMint: null, pricedAt: null,
       supplyRaw: null, tokenProgramId: null, createdHere: true, slot: 0,
     });
 
@@ -230,7 +233,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
         createdHere, slot: tx.slot,
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
-        destroyedTokens: null, marketCapQuote: null, quoteMint: null,
+        destroyedTokens: null, marketCapQuote: null, quoteMint: null, pricedAt: null,
         supplyRaw: null, tokenProgramId: null,
       });
     }
@@ -344,8 +347,17 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     for (const [mint, set] of wallets) collections.get(mint)!.burners = set.size;
 
     // ---- 3b. market caps, one call for every coin.
-    let priceable = [...collections.values()]
+    // Pricing every coin every rebuild is what the free RPC tiers refuse: at
+    // 154 coins it is a dozen batched calls and they answer 403, so the whole
+    // market cap column read blank. A price does not need to be three minutes
+    // old -- it needs to exist. So each rebuild refreshes the coins priced
+    // longest ago and everything else keeps the price it had, which the
+    // snapshot already carries forward.
+    const stalest = [...collections.values()]
       .filter((c) => c.supplyRaw && c.tokenProgramId)
+      .sort((a, b) => (a.pricedAt ?? 0) - (b.pricedAt ?? 0))
+      .slice(0, PRICE_BATCH);
+    const priceable = stalest
       .map((c) => ({ mint: c.mint, tokenProgramId: c.tokenProgramId!, supply: BigInt(c.supplyRaw!) }));
     try {
       const curves = await readCurves(r, priceable);
@@ -354,6 +366,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         if (!c) continue;
         c.marketCapQuote = state.marketCapQuote?.toString() ?? null;
         c.quoteMint = state.quoteMint;
+        c.pricedAt = Date.now();
       }
     } catch (e) {
       // No market caps this time. The leaderboard still ranks by burns, which
