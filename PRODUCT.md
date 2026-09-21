@@ -50,11 +50,25 @@ both chains and anyone can check the arithmetic.
 
 Users arrive from Solana, likely from a pump.fun link or a post on X, frequently on a phone.
 
+## Operator Fee Control
+
+Meteora partner fees are managed from a hidden operator console reached through an unlinked,
+hash-matched route. The route is only a discoverability boundary: it grants no authority and must never
+be documented, linked, or treated as a credential.
+
+The console unlocks fee balances and claim controls only when the connected wallet matches the fee
+authority in the live Meteora configuration. Every pool produces its own claim transaction. “Claim all”
+may request bounded wallet batches where supported, but each submitted transaction is confirmed
+independently and partial completion remains visible. Product language must distinguish a transaction
+submitted to Solana from one confirmed on-chain.
+
 ## Wallets — standing rules
 
-- **Never use the wallet that launched $STAMP** (`26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA`).
-  Operator instruction, 2026-09-20: it is not to be used for anything, ever. It holds the launch
-  supply. Its key was exposed in chat and should be treated as compromised.
+- **The wallet that launched $STAMP** (`26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA`) is restricted to
+  authorizing and receiving the Meteora partner-fee claims for which it is already the live on-chain
+  authority. Operator instruction, 2026-09-21: do not use it for launches, tests, or unrelated transfers.
+  Earlier chat exposure means it should still be treated as potentially compromised and rotated wherever
+  the deployed protocol permits.
 - **Launches and tests use** `mAQdwbg2EUGLgTfCV6Ts6S3PNFSiUW7pCwo1341p5FS`.
 - Fee-paying and minting wallets created by this project live in `keys/` (git-ignored, 0600) and are
   listed in docs/RUNBOOK.md.

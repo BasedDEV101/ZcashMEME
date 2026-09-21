@@ -162,6 +162,10 @@ At phone widths, navigation becomes two rows: brand and theme remain in the firs
 routes fill a second row. Statistics collapse to two columns, wide tables scroll horizontally, and every
 coarse-pointer target is at least 44px high.
 
+The hidden Meteora fee console reuses the same shell but operates as a focused desk: authority and claim
+summary lead, then the fee ledger follows. Its route remains unlinked and is described only as
+hash-matched; the interface never prints or teaches the route segment.
+
 ## Elevation & Depth
 
 Depth is structural and restrained. Dark tonal layers separate ground, panels, fields, and hover states;
@@ -228,6 +232,22 @@ The compact network strip is limited to the flagship's current market cap, proto
 tokens launched through the pad. Wallet and certificate counts belong in deeper records rather than
 competing with those three headline decisions.
 
+### Fee Admin Console
+
+The Meteora fee console is wallet gated, not route gated. Before authorization, it shows the signing
+boundary and withholds pool balances and claim controls. A matching configured fee wallet unlocks three
+summary figures, a refresh action, per-pool claims, and a batch “Claim all” action. Each pool remains an
+independent transaction so one failure cannot contaminate another claim.
+
+At medium widths and above, the ledger is a horizontally safe table with pool, state, STAMP fees, base
+fees, and action columns. Below that breakpoint it becomes stacked fee cards with the same information
+and controls; it never compresses critical amounts into unreadable columns.
+
+Claim status is factual and progressive: building, awaiting wallet approval, sending, submitted, and
+confirmed are distinct states. Partial failure reports confirmed transactions separately from submitted
+but unconfirmed transactions and preserves explorer links for both. Completion and failure move focus to
+an appropriate polite `status` or assertive `alert` live region.
+
 ### Stamp Hero
 
 The hero is a wide authored scene, not a text baked into a raster. Copy, calls to action, live totals, and
@@ -244,6 +264,9 @@ on the right under a contrast-preserving shade.
 - **Do** keep tables sortable, figures tabular, missing data honest, and asynchronous status announced.
 - **Do** maintain dark and light theme parity and 44px touch targets on coarse pointers.
 - **Do** preserve raster provenance in the owning surface brief.
+- **Do** treat the configured fee wallet as the admin authorization boundary and keep the hidden route
+  unlinked.
+- **Do** label submitted and confirmed claims separately whenever confirmation is incomplete.
 
 ### Don't:
 
@@ -251,3 +274,5 @@ on the right under a contrast-preserving shade.
 - **Don't** bake actionable copy, amounts, addresses, or proof into imagery.
 - **Don't** scatter orange as decoration, add colored glow, or wrap every metric in a floating card.
 - **Don't** imply market, privacy, or verification facts that the live data cannot support.
+- **Don't** expose, print, or describe the hidden route segment, or imply that knowing it authorizes a
+  claim.

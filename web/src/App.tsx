@@ -15,6 +15,8 @@ import { MarketRecord } from "./components/MarketRecord.tsx";
 import { NewVersion } from "./components/NewVersion.tsx";
 import { Boundary } from "./components/Boundary.tsx";
 import { marketCap, money, toBigInt, tokens, useActivity } from "./lib/activity.ts";
+import { MeteoraFeeAdmin } from "./components/MeteoraFeeAdmin.tsx";
+import { isFeeAdminRoute } from "./lib/feeAdminRoute.ts";
 
 type LaunchMode = "meteora" | "pump";
 
@@ -93,6 +95,18 @@ function Page() {
     setRoute(path);
     scrollTo({ top: 0 });
   };
+
+  if (isFeeAdminRoute(route)) {
+    return (
+      <MeteoraFeeAdmin
+        collections={data?.collections ?? []}
+        activityLoading={loading}
+        activityError={error}
+        theme={theme}
+        setTheme={setTheme}
+      />
+    );
+  }
 
   if (route.startsWith("/leaderboard") || route.startsWith("/burns")) {
     return (
