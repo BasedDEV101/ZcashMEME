@@ -10,7 +10,15 @@ async function visit(name, width, steps, { wallet = false } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 1000 } });
   const seen = [];
   page.on("pageerror", (e) => seen.push(`THROWN  ${e.message}`));
-  page.on("console", (m) => m.type() === "error" && seen.push(`CONSOLE ${m.text()}`));
+  // The browser logs its own console error for any failed response. Two of
+  // these cases break the API on purpose, so that log is the test working,
+  // not the site failing -- counting it meant the suite never read as clean
+  // and a real regression would have hidden among the noise.
+  page.on("console", (m) => {
+    if (m.type() !== "error") return;
+    if (/Failed to load resource: the server responded with a status of \d\d\d/.test(m.text())) return;
+    seen.push(`CONSOLE ${m.text()}`);
+  });
   page.on("requestfailed", (r) => seen.push(`REQFAIL ${r.url().slice(0, 80)} ${r.failure()?.errorText ?? ""}`));
   if (wallet) await page.addInitScript(MOCK);
   try {
