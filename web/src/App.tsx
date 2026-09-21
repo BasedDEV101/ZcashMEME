@@ -10,6 +10,7 @@ import { ALLOWANCE_STAMPS, CREATOR_FEE_PERCENT, LAUNCH_FEE_SOL, STAMP_COST_ZEC, 
 import { Leaderboard } from "./components/Leaderboard.tsx";
 import { Burns } from "./components/Burns.tsx";
 import { LatestCoins } from "./components/LatestCoins.tsx";
+import { MarketRecord } from "./components/MarketRecord.tsx";
 import { NewVersion } from "./components/NewVersion.tsx";
 import { Boundary } from "./components/Boundary.tsx";
 import { useActivity } from "./lib/activity.ts";
@@ -81,6 +82,9 @@ function Page() {
           </section>
           <Boundary what="launch list">
             <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={8} />
+          </Boundary>
+          <Boundary what="market record">
+            <MarketRecord collections={data?.collections ?? []} loading={loading} error={error} />
           </Boundary>
           <Boundary what="leaderboard">
             <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} />

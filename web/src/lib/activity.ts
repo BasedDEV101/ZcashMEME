@@ -120,14 +120,28 @@ const QUOTES: Record<string, { symbol: string; decimals: number }> = {
   A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS: { symbol: "ZEC", decimals: 8 },
 };
 
-/** A market cap in its own currency, at a readable number of digits. */
-export function marketCap(raw: string | null | undefined, quoteMint: string | null | undefined): string | null {
+/**
+ * A market cap in whole units of its own quote, or null.
+ *
+ * Comparable only against another cap in the same quote: 1 ZEC is not 1 SOL
+ * and nothing here knows the rate. It exists so an ordering and the figures it
+ * prints agree with each other, not to convert between the two.
+ */
+export function marketCapValue(raw: string | null | undefined, quoteMint: string | null | undefined): number | null {
   const value = toBigInt(raw);
   if (value === null) return null;
   // An unknown quote falls back to SOL's scale rather than to nothing: every
   // coin priced before ZEC pairing is SOL-quoted and carries no quote field.
   const quote = QUOTES[quoteMint ?? ""] ?? QUOTES.So11111111111111111111111111111111111111112;
   const n = Number(value) / 10 ** quote.decimals;
+  return Number.isFinite(n) ? n : null;
+}
+
+/** A market cap in its own currency, at a readable number of digits. */
+export function marketCap(raw: string | null | undefined, quoteMint: string | null | undefined): string | null {
+  const n = marketCapValue(raw, quoteMint);
+  if (n === null) return null;
+  const quote = QUOTES[quoteMint ?? ""] ?? QUOTES.So11111111111111111111111111111111111111112;
   const digits = n >= 1000 ? 0 : n >= 10 ? 1 : n >= 0.01 ? 2 : 4;
   return `${n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote.symbol}`;
 }

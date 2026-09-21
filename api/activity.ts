@@ -508,10 +508,14 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     if (snapshot.readable && cached && worse) {
       return json(res, 200, { ...cached, stale: true }, 60);
     }
+    // Serve exactly what gets stored. Saving the merged reading but returning
+    // the raw one meant a rebuild that priced a single coin still showed a
+    // single coin priced, however much was already known.
+    const merged = snapshot.readable ? await mergedWithLatest(body) : body;
     if (snapshot.readable && mintsRead && !worse && ranked.length > 0) {
-      await saveSnapshot(await mergedWithLatest(body));
+      await saveSnapshot(merged);
     }
-    return json(res, 200, body, 120);
+    return json(res, 200, merged, 120);
   } catch (e) {
     // Ask for the snapshot again rather than trusting the copy read at the
     // start: that read can itself have failed, and answering 502 while a

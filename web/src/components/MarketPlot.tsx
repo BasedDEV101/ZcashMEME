@@ -59,13 +59,27 @@ function useWidth(box: RefObject<HTMLDivElement | null>): number {
   return width;
 }
 
-/** A reading's date, at the resolution the span actually resolves. */
-function stamp(t: number, spanMs: number): string {
-  const d = new Date(t);
-  if (!Number.isFinite(d.getTime())) return "—";
-  return spanMs < 36 * 3600_000
-    ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const DAY = 86_400_000;
+const clock = (d: Date) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const date = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+/**
+ * How the two dates under the field are written, decided by the span they
+ * cover rather than by a fixed threshold.
+ *
+ * Bare clock times are only unambiguous inside one calendar day: 16:16 beside
+ * 03:36 reads as a span of four hours when it was eleven. Once the readings
+ * run past a few days the time stops carrying anything and the date is enough.
+ */
+function stamper(from: number, to: number): (t: number) => string {
+  const sameDay = new Date(from).toDateString() === new Date(to).toDateString();
+  const span = to - from;
+  return (t) => {
+    const d = new Date(t);
+    if (!Number.isFinite(d.getTime())) return "—";
+    if (sameDay) return clock(d);
+    return span < 5 * DAY ? `${date(d)} ${clock(d)}` : date(d);
+  };
 }
 
 /**
@@ -135,6 +149,7 @@ export function MarketPlot({
     ? `${line} L${placed[placed.length - 1].x.toFixed(2)} ${base} L${placed[0].x.toFixed(2)} ${base} Z`
     : "";
   const last = placed[placed.length - 1];
+  const written = stamper(t0, last?.t ?? t0);
 
   return (
     <figure className="m-0">
@@ -198,10 +213,10 @@ export function MarketPlot({
                 <text x={plotW + 9} y={flat ? last.y + fs * 0.36 : top + fs * 0.9}>{high}</text>
               )}
               {low && gutter > 0 && !flat && <text x={plotW + 9} y={base}>{low}</text>}
-              {series.length > 1 && <text x={0} y={height - 5}>{stamp(t0, span)}</text>}
+              {series.length > 1 && <text x={0} y={height - 5}>{written(t0)}</text>}
               {last && (
                 <text x={plotW} y={height - 5} textAnchor="end">
-                  {series.length > 1 ? stamp(series[series.length - 1].t, span) : "first reading"}
+                  {series.length > 1 ? written(last.t) : "first reading"}
                 </text>
               )}
             </g>
