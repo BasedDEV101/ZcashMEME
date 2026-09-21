@@ -28,6 +28,11 @@ import history from "./_history.json" with { type: "json" };
 
 const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 const METEORA_DBC = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
+// The config's creation transaction. Rows before this cannot be Meteora DBC
+// launches from our config and can be migrated to `pump` without refetching
+// their transactions. Only the small window after this slot needs re-reading.
+const METEORA_CONFIG_CREATED_AT_SLOT = 449_084_835;
+const LAUNCH_PLATFORM_SCHEMA = 1;
 const FEE_PAGES = 10;      // operator history: low volume, read it all
 const BURN_PAGES = 2;      // per mint, newest first; older burns come from the snapshot
 const WIDTH = 5;           // concurrent RPC streams
@@ -205,7 +210,8 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
   const snapshot = await loadSnapshot();
   const cached = snapshot.data;
   const computedAt = typeof cached?.computedAt === "string" ? Date.parse(cached.computedAt) : 0;
-  if (cached && Date.now() - computedAt < FRESH_MS) {
+  const needsPlatformMigration = !!cached && cached.launchPlatformSchema !== LAUNCH_PLATFORM_SCHEMA;
+  if (cached && !needsPlatformMigration && Date.now() - computedAt < FRESH_MS) {
     const stored = (Array.isArray(cached.collections) ? cached.collections : []) as Collection[];
     const dex = await readDexMarketData(stored.map((c) => c.mint));
     const collections = stored.map((c) => {
@@ -254,12 +260,18 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       // A reading taken before the register opened can carry entries it no
       // longer admits; they are dropped here rather than inherited forever.
       if (!prior?.mint || !eligible(prior)) continue;
+      const launchPlatform = prior.launchPlatform
+        ?? ((prior.slot ?? 0) < METEORA_CONFIG_CREATED_AT_SLOT ? "pump" : undefined);
       collections.set(prior.mint, {
         ...prior,
+        launchPlatform,
         // Counted fresh below from the burns actually seen this pass.
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
       });
-      if (prior.signature) knownSignatures.add(prior.signature);
+      // Newer rows written by the pre-Meteora schema must have their launch
+      // transaction re-read. Otherwise the old cursor permanently hides a
+      // coin that the old parser saw and rejected.
+      if (prior.signature && launchPlatform) knownSignatures.add(prior.signature);
     }
     if (!collections.has(FLAGSHIP.mint)) collections.set(FLAGSHIP.mint, {
       mint: FLAGSHIP.mint, symbol: FLAGSHIP.symbol, name: FLAGSHIP.name, image: FLAGSHIP.image,
@@ -291,7 +303,9 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
 
     const sigs = [];
     for (const address of FEE_ADDRESSES) {
-      const until = priorCursors[address];
+      // One schema migration deliberately replays the recent fee history.
+      // Once the marker is saved, normal cursor-bounded discovery resumes.
+      const until = needsPlatformMigration ? undefined : priorCursors[address];
       let before: string | undefined;
       let newest: string | undefined;
       for (let page = 0; page < FEE_PAGES; page++) {
@@ -345,7 +359,8 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       const tx = normalizeTransaction(raw, { finalized: true });
       if (!tx.succeeded || tx.memos.length !== 1) continue;
       const req = parseDeployRequest(tx.memos[0]);
-      if (!req || collections.has(req.mint)) continue;
+      const existing = req ? collections.get(req.mint) : undefined;
+      if (!req || existing?.launchPlatform) continue;
 
       // The fee must actually have been paid, or anyone could list for free.
       const keys = resolveKeys(raw);
@@ -399,9 +414,11 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         .reduce((t, b) => t + BigInt(b.uiTokenAmount.amount), 0n);
 
       collections.set(req.mint, {
-        mint: req.mint, symbol: req.symbol, name, image: null,
+        ...existing,
+        mint: req.mint, symbol: req.symbol, name: name ?? existing?.name ?? null,
+        image: existing?.image ?? null,
         minWholeTokens: req.minWholeTokens.toString(), signature: tx.signature,
-        initialSupply: minted > 0n ? minted.toString() : null,
+        initialSupply: existing?.initialSupply ?? (minted > 0n ? minted.toString() : null),
         launchedAt: tx.blockTime, launchedBy: tx.signers[0] ?? null, decimals: 6,
         createdHere: true, launchPlatform, slot: tx.slot,
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
@@ -613,6 +630,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
       historyUpdated: (history as { updated: string | null }).updated,
       computedAt: new Date().toISOString(),
+      launchPlatformSchema: LAUNCH_PLATFORM_SCHEMA,
       cursors,
       rates,
       currentMarketCapUsd: currentMarketCapUsd ?? cached?.currentMarketCapUsd ?? null,
