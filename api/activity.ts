@@ -28,10 +28,6 @@ import history from "./_history.json" with { type: "json" };
 
 const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 const METEORA_DBC = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
-// The config's creation transaction. Rows before this cannot be Meteora DBC
-// launches from our config and can be migrated to `pump` without refetching
-// their transactions. Only the small window after this slot needs re-reading.
-const METEORA_CONFIG_CREATED_AT_SLOT = 449_084_835;
 const LAUNCH_PLATFORM_SCHEMA = 1;
 const FEE_PAGES = 10;      // operator history: low volume, read it all
 const BURN_PAGES = 2;      // per mint, newest first; older burns come from the snapshot
@@ -261,18 +257,17 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       // A reading taken before the register opened can carry entries it no
       // longer admits; they are dropped here rather than inherited forever.
       if (!prior?.mint || !eligible(prior)) continue;
-      const launchPlatform = prior.launchPlatform
-        ?? ((prior.slot ?? 0) < METEORA_CONFIG_CREATED_AT_SLOT ? "pump" : undefined);
+      // The old parser only admitted a row after finding a Pump create
+      // instruction. Therefore every pre-schema row already in the snapshot
+      // is provably Pump; only launches absent from that snapshot need replay.
+      const launchPlatform = prior.launchPlatform ?? "pump";
       collections.set(prior.mint, {
         ...prior,
         launchPlatform,
         // Counted fresh below from the burns actually seen this pass.
         burnedTokens: "0", burnCount: 0, refusedCount: 0, burners: 0,
       });
-      // Newer rows written by the pre-Meteora schema must have their launch
-      // transaction re-read. Otherwise the old cursor permanently hides a
-      // coin that the old parser saw and rejected.
-      if (prior.signature && launchPlatform) knownSignatures.add(prior.signature);
+      if (prior.signature) knownSignatures.add(prior.signature);
     }
     if (!collections.has(FLAGSHIP.mint)) collections.set(FLAGSHIP.mint, {
       mint: FLAGSHIP.mint, symbol: FLAGSHIP.symbol, name: FLAGSHIP.name, image: FLAGSHIP.image,
