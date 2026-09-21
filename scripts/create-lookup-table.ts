@@ -69,7 +69,11 @@ const operator = Keypair.fromSecretKey(decodeBase58(keyfile.secretKeyBase58));
 // The launch wallet is off limits for every operation, this one included.
 assertNotForbidden(operator.publicKey.toBase58(), "creating the lookup table");
 
-const conn = new Connection(solanaRpcUrl().split(",")[0].trim(), "confirmed");
+// Falls back to the public endpoint: the paid keys are shared with the live
+// site and answer 429 under load, and a one-off setup script should not
+// compete with it.
+const endpoints = [...solanaRpcUrl().split(",").map((u) => u.trim()), "https://solana-rpc.publicnode.com"];
+const conn = new Connection(process.env.SETUP_RPC ?? endpoints[endpoints.length - 1], "confirmed");
 const balance = await conn.getBalance(operator.publicKey);
 console.log(`operator ${operator.publicKey.toBase58()}`);
 console.log(`balance  ${balance / 1e9} SOL`);

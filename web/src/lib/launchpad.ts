@@ -26,6 +26,21 @@ export const OPERATOR_ADDRESS = "26oK69pYx7R25ULts9hLYF2HpTnZ421jPYMPsds9GtYA";
 export const CREATOR_FEE_BPS = 200;
 
 /**
+ * What coins launched here trade against.
+ *
+ * ZEC, not SOL. A pad whose whole subject is Zcash quoting its coins in
+ * somebody else's currency is a detail people notice. pump.fun's `create_v2`
+ * takes a quote mint from an admin-managed list, and this one is on it --
+ * checked against the live QuoteControl account, not assumed.
+ *
+ * Its token program is read from chain at build time rather than guessed:
+ * every quote ATA, the pool's and each shareholder's, is derived with it.
+ */
+export const QUOTE_MINT = "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS";
+export const QUOTE_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+export const QUOTE_SYMBOL = "ZEC";
+
+/**
  * The address lookup table every launch is compiled against.
  *
  * A launch touches 18 accounts that never change -- the pump programs and
@@ -38,7 +53,17 @@ export const CREATOR_FEE_BPS = 200;
  * not listed by hand. Replacing it means re-running that script.
  */
 export const LOOKUP_TABLE = "3zEFdQiMCRF5ew9KuLkeT4XVnRSRJjv58HWv8LSxvzJP";
-export const CREATOR_FEE_PERCENT = CREATOR_FEE_BPS / 100;
+
+/**
+ * What a coin launched here actually charges its traders, as a percentage.
+ *
+ * Derived from pump's live schedule rate, NOT from CREATOR_FEE_BPS: the
+ * instruction asks for 200 bps and the program stores zero, so a site that
+ * printed the requested number would be telling launchers something untrue
+ * about their own coin.
+ */
+export const SCHEDULE_CREATOR_FEE_BPS = 30;
+export const CREATOR_FEE_PERCENT = SCHEDULE_CREATOR_FEE_BPS / 100;
 
 /** Roughly what one stamp costs the collection's funding balance, in ZEC. */
 export const STAMP_COST_ZEC = 0.00030546;

@@ -112,11 +112,11 @@ function Page() {
                   collection, or a paid fee and no coin.
                 </Warning>
                 <Warning title="The coin is yours; the creator fee is the pad's">
-                  You create it from your own wallet and you are its creator on pump.fun. It carries a
-                  {" "}{CREATOR_FEE_PERCENT}% creator fee, and that fee goes to the pad — it is what
-                  pays to inscribe your holders' stamps. You still own every token you buy, and nothing
-                  about the coin is held by us. If you want the creator fee yourself, launch on pump.fun
-                  directly instead.
+                  You create it from your own wallet and you are its creator on pump.fun. Its creator
+                  fee — pump's standard {CREATOR_FEE_PERCENT}% of each trade — goes to the pad, which is
+                  what pays to inscribe your holders' stamps. You still own every token you buy, and
+                  nothing about the coin is held by us. If you want that fee yourself, launch on
+                  pump.fun directly instead.
                 </Warning>
                 <Warning title="Mayhem mode is off">
                   It would double the supply and let pump's agent burn tokens on its own — burns nobody

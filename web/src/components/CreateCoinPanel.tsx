@@ -187,8 +187,8 @@ export function CreateCoinPanel() {
         {/* Stated next to the button too: this is where the decision is made,
             and the fee is set at creation. */}
         <p className="mt-2 max-w-[60ch] text-sm text-ink-soft">
-          Your coin carries a {CREATOR_FEE_PERCENT}% creator fee that goes to the pad, which is what pays
-          for your holders' stamps. You are still the creator of the coin.
+          Your coin's creator fee — pump's standard {CREATOR_FEE_PERCENT}% of each trade — goes to the
+          pad, which is what pays for your holders' stamps. You are still the creator of the coin.
         </p>
         {error && <p className="mt-3 max-w-[58ch] text-sm text-stamp-deep">{error}</p>}
       </div>
