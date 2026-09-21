@@ -73,6 +73,59 @@ export interface Collection {
   slot: number;
 }
 
+/**
+ * Fold this reading into whatever is stored right now, rather than replacing
+ * it.
+ *
+ * Two rebuilds can run at once. Both read the snapshot, one prices forty coins
+ * and saves, the other is refused by the RPC and saves zero over it -- each
+ * one's guard compared against a copy read before the other wrote. The column
+ * flickered 0, 40, 0, 40 and never accumulated. A guard cannot fix a
+ * read-modify-write race; not replacing can.
+ *
+ * So a save re-reads, unions the coins and the burns, and for each coin keeps
+ * whichever price was taken later. Concurrent rebuilds then add to each other
+ * instead of cancelling out.
+ */
+async function mergedWithLatest(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const latest = (await loadSnapshot()).data;
+  if (!latest) return body;
+
+  const mine = (body.collections ?? []) as Collection[];
+  const theirs = (Array.isArray(latest.collections) ? latest.collections : []) as Collection[];
+  const byMint = new Map<string, Collection>();
+  for (const c of theirs) if (c?.mint) byMint.set(c.mint, c);
+  for (const c of mine) {
+    if (!c?.mint) continue;
+    const other = byMint.get(c.mint);
+    // Keep the later price, whichever reading took it.
+    const keepTheirs = other?.marketCapQuote && (other.pricedAt ?? 0) > (c.pricedAt ?? 0);
+    byMint.set(c.mint, keepTheirs
+      ? { ...c, marketCapQuote: other!.marketCapQuote, quoteMint: other!.quoteMint, pricedAt: other!.pricedAt }
+      : c);
+  }
+
+  const burns = new Map<string, unknown>();
+  for (const b of (Array.isArray(latest.burns) ? latest.burns : []) as { signature?: string }[]) {
+    if (b?.signature) burns.set(b.signature, b);
+  }
+  for (const b of ((body.burns ?? []) as { signature?: string }[])) {
+    if (b?.signature) burns.set(b.signature, b);
+  }
+
+  return {
+    ...body,
+    collections: [...byMint.values()].sort((a, b) => {
+      const d = (toBig(b.burnedTokens) - toBig(a.burnedTokens));
+      return d === 0n ? (b.launchedAt ?? 0) - (a.launchedAt ?? 0) : d > 0n ? 1 : -1;
+    }),
+    burns: [...burns.values()].slice(0, MAX_BURN_ROWS),
+  };
+}
+
+const toBig = (v: unknown): bigint =>
+  typeof v === "string" && /^\d+$/.test(v) ? BigInt(v) : 0n;
+
 /** How long a rebuild's answer stands before another one is worth doing. */
 const FRESH_MS = 3 * 60 * 1000;
 
@@ -456,7 +509,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       return json(res, 200, { ...cached, stale: true }, 60);
     }
     if (snapshot.readable && mintsRead && !worse && ranked.length > 0) {
-      await saveSnapshot(body);
+      await saveSnapshot(await mergedWithLatest(body));
     }
     return json(res, 200, body, 120);
   } catch (e) {
