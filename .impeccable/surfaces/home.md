@@ -55,6 +55,9 @@ Every raster shipped by this surface is accounted for here:
 | `web/public/dex-mark.png` | Supplied project asset; not generated as part of this redesign. | Small DEX brand mark in the navigation. |
 | `web/public/stamp-mark.png` | Supplied project stamp artwork; not generated or altered as part of this redesign. | Fully contained certificate watermark and counterfoil brand mark. |
 | `web/public/stamp-mark-transparent.png` | User-supplied transparent version of the project stamp artwork. | Navbar brand mark, flagship leaderboard avatar, live-market dossier, and counterfoil brand mark. |
+| `web/public/favicon-16.png` | Deterministic tightly cropped 16 px derivative of the user-supplied transparent stamp artwork. | Small browser-tab icon. |
+| `web/public/favicon-32.png` | Deterministic tightly cropped 32 px derivative of the user-supplied transparent stamp artwork. | Standard browser-tab icon and ICO fallback source. |
+| `web/public/apple-touch-icon.png` | Deterministic tightly cropped 180 px derivative of the user-supplied transparent stamp artwork. | Apple home-screen and bookmark icon. |
 
 ## Finish review
 
