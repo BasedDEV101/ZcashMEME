@@ -13,7 +13,7 @@ import { LatestCoins } from "./components/LatestCoins.tsx";
 import { MarketRecord } from "./components/MarketRecord.tsx";
 import { NewVersion } from "./components/NewVersion.tsx";
 import { Boundary } from "./components/Boundary.tsx";
-import { useActivity } from "./lib/activity.ts";
+import { toBigInt, useActivity } from "./lib/activity.ts";
 
 export default function App() {
   const wallets = useMemo(() => [], []);
@@ -40,6 +40,21 @@ function Page() {
   const error = activity.status === "error" ? activity.message : null;
   const data = activity.status === "ready" ? activity.data : null;
   const stale = data?.stale ?? false;
+
+  // The hero used to print one certificate -- 1,500,000 of a single coin --
+  // which read as the pad's whole output rather than as the one example it
+  // was. It now totals every burn the register knows about.
+  const totals = (data?.collections ?? []).reduce(
+    (t, c) => {
+      const burned = toBigInt(c.burnedTokens) ?? 0n;
+      return {
+        destroyed: t.destroyed + burned,
+        certificates: t.certificates + (c.burnCount ?? 0),
+        coins: t.coins + (burned > 0n ? 1 : 0),
+      };
+    },
+    { destroyed: 0n, certificates: 0, coins: 0 },
+  );
 
   useEffect(() => {
     fetch("/collections.json")
@@ -179,12 +194,17 @@ function Page() {
         <Nav route={route} go={go} />
         <NewVersion />
         <Certificate
-          serial="000001"
-          amount={formatTokens(BigInt(PROOF.mainnetAmount))}
-          ticker={CONFIG.ticker}
+          serial={String(totals.certificates).padStart(6, "0")}
+          amount={loading ? "—" : formatTokens(totals.destroyed)}
+          unit={
+            loading
+              ? "Counting what the register holds…"
+              : totals.certificates === 0
+                ? "No tokens destroyed here yet. The first burn is recorded the moment it finalises."
+                : `tokens destroyed across ${totals.coins} ${totals.coins === 1 ? "coin" : "coins"}, each one certified on Zcash`
+          }
           cancelled
-          recipient={PROOF.mainnetRecipient}
-          counterfoil={<Counterfoil />}
+          counterfoil={<Counterfoil certificates={loading ? null : totals.certificates} />}
         >
           <div className="max-w-[62ch]">
             <p className="font-display text-[1.45rem] leading-snug text-ink sm:text-[1.75rem]">
@@ -330,7 +350,7 @@ function Footer() {
   );
 }
 
-function Counterfoil() {
+function Counterfoil({ certificates }: { certificates: number | null }) {
   return (
     <div className="flex h-full flex-col justify-between gap-8">
       <div>
@@ -338,6 +358,7 @@ function Counterfoil() {
           Counterfoil
         </p>
         <dl className="mt-4 space-y-3.5">
+          <Row label="Certificates" value={certificates === null ? "—" : String(certificates)} />
           <Row label="Issued on" value="Zcash mainnet" />
           <Row label="Destroyed on" value="Solana" />
           <Row label="Reissuable" value="No" />

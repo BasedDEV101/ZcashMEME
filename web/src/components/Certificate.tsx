@@ -10,6 +10,7 @@ export function Certificate({
   serial,
   amount,
   ticker,
+  unit,
   cancelled = false,
   recipient,
   children,
@@ -17,7 +18,10 @@ export function Certificate({
 }: {
   serial: string;
   amount: string;
-  ticker: string;
+  /** The ticker, when the figure belongs to one coin. */
+  ticker?: string;
+  /** What the figure counts, when it spans more than one coin. */
+  unit?: ReactNode;
   cancelled?: boolean;
   recipient?: string;
   children?: ReactNode;
@@ -65,9 +69,8 @@ export function Certificate({
             <p className="tnum font-display text-[clamp(2.75rem,11vw,5.5rem)] leading-[0.95] font-semibold text-ink">
               {amount}
             </p>
-            <p className="font-display text-xl text-engrave italic">{ticker}</p>
-
-
+            {ticker && <p className="font-display text-xl text-engrave italic">{ticker}</p>}
+            {unit && <p className="mt-1 max-w-[42ch] text-[0.92rem] text-ink-soft">{unit}</p>}
           </div>
 
           {recipient && (

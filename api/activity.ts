@@ -140,7 +140,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
   const cached = snapshot.data;
   const computedAt = typeof cached?.computedAt === "string" ? Date.parse(cached.computedAt) : 0;
   if (cached && Date.now() - computedAt < FRESH_MS) {
-    return json(res, 200, cached, 120);
+    return json(res, 200, { ...cached, served: "snapshot" }, 120);
   }
 
   try {
@@ -461,6 +461,11 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       } catch { /* leave it without an image */ }
     }));
 
+    const priorEligible = (Array.isArray(cached?.collections) ? (cached.collections as Collection[]) : [])
+      .filter((c) => c?.mint && eligible(c));
+    const pricedBeforeCount = priorEligible.filter((c) => c.marketCapQuote).length;
+    const pricedNowCount = [...collections.values()].filter((c) => c.marketCapQuote).length;
+
     const ranked = [...collections.values()].sort((a, b) => {
       const d = BigInt(b.burnedTokens) - BigInt(a.burnedTokens);
       if (d !== 0n) return d > 0n ? 1 : -1;
@@ -475,6 +480,13 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       historyUpdated: (history as { updated: string | null }).updated,
       computedAt: new Date().toISOString(),
       cursors,
+      // Diagnostics: the market cap column kept flickering and two rounds of
+      // reasoning about why were wrong, so the answer is reported rather than
+      // inferred.
+      served: "rebuild",
+      snapshotReadable: snapshot.readable,
+      pricedBefore: pricedBeforeCount,
+      pricedNow: pricedNowCount,
       priced: [...collections.values()].filter((c) => c.marketCapQuote).length,
       priceable: priceable.length,
       priceError,
@@ -490,16 +502,12 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // Compared against what the PREVIOUS reading would list under today's
     // rules, not its raw length: otherwise tightening the rules looks like
     // data loss and blocks every save from then on.
-    const before = (Array.isArray(cached?.collections) ? (cached.collections as Collection[]) : [])
-      .filter((c) => c?.mint && eligible(c));
-    const previous = before.length;
+    const previous = priorEligible.length;
     // Prices are held to the same rule as coins. A rebuild whose pricing was
     // refused still lists every coin, so the count guard let it save over one
     // that had priced forty of them -- the column flickered 0, 40, 0, 40 and
     // never accumulated.
-    const pricedBefore = before.filter((c) => c.marketCapQuote).length;
-    const pricedNow = ranked.filter((c) => c.marketCapQuote).length;
-    const worse = ranked.length < previous || pricedNow < pricedBefore;
+    const worse = ranked.length < previous || pricedNowCount < pricedBeforeCount;
     // A rebuild that found fewer coins than the last complete reading is a
     // worse answer, not a newer one. Refusing to SAVE it was not enough: it
     // was still served for that request and cached at the edge for two
