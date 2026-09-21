@@ -206,7 +206,7 @@ export async function saveSnapshot(body: unknown): Promise<void> {
  * over one holding fifty-eight. A reading we could not compare against is a
  * reading we must not overwrite.
  */
-export async function loadSnapshot(): Promise<{ readable: boolean; data: Record<string, unknown> | null }> {
+export async function loadSnapshot(attempt = 0): Promise<{ readable: boolean; data: Record<string, unknown> | null }> {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return { readable: false, data: null };
   try {
     const { list } = await import("@vercel/blob");
@@ -214,11 +214,25 @@ export async function loadSnapshot(): Promise<{ readable: boolean; data: Record<
     const blob = found.blobs[0];
     if (!blob) return { readable: true, data: null };   // definitely absent
     const res = await fetch(blob.url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return { readable: false, data: null };
+    if (!res.ok) return retry(attempt);
     return { readable: true, data: (await res.json()) as Record<string, unknown> };
   } catch {
-    return { readable: false, data: null };
+    return retry(attempt);
   }
+}
+
+/**
+ * One more try before giving up on the stored reading.
+ *
+ * An unreadable snapshot is the one case with no safe answer: nothing to
+ * compare a rebuild against, so a truncated one goes out as-is and the
+ * leaderboard drops to a handful of coins. A single transient blob read was
+ * enough to cause that, and asking twice costs a few hundred milliseconds.
+ */
+async function retry(attempt: number) {
+  if (attempt > 0) return { readable: false, data: null };
+  await new Promise((r) => setTimeout(r, 250));
+  return loadSnapshot(attempt + 1);
 }
 
 export interface CurveState {
