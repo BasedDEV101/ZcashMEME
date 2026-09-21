@@ -362,7 +362,7 @@ function Counterfoil({ certificates }: { certificates: number | null }) {
         </p>
         <dl className="mt-4 space-y-3.5">
           <Row label="Certificates" value={certificates === null ? "—" : String(certificates)} />
-          <Row label="Issued on" value="Zcash mainnet" />
+          <Row label="Issued on" value="Mainnet" />
           <Row label="Destroyed on" value="Solana" />
           <Row label="Reissuable" value="No" />
           <Row label="Held by us" value="Nothing" />
