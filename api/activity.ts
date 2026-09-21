@@ -18,7 +18,7 @@
 // filter can never drop a valid burn.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { decodeBase58, inParallel, json, lamportsTransferredTo, loadSnapshot, readCurves, readMints, readOnchainMetadata, readPumpCreate, rpc, saveSnapshot } from "./_rpc.ts";
+import { decodeBase58, inParallel, json, lamportsTransferredTo, loadSnapshot, readCurves, readMints, readOnchainMetadata, readPumpCreate, readRates, rpc, saveSnapshot, type Rates } from "./_rpc.ts";
 import { parseDeployRequest, REQUEST_PREFIX } from "../src/core/deploy-request.ts";
 import { normalizeTransaction, resolveKeys, type RpcTransaction } from "../src/solana/normalize.ts";
 import { evaluateBurn } from "../src/core/validity.ts";
@@ -448,6 +448,11 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       priceError = (e as Error).message;
     }
 
+    // ---- 3c. what the quote currencies are worth, so caps read as money.
+    //          A failed fetch keeps the rates already stored rather than
+    //          dropping every coin back to raw ZEC.
+    const rates: Rates = (await readRates()) ?? ((cached?.rates as Rates | undefined) ?? {});
+
     // ---- 4. images, best effort: a launcher's host being down must not empty
     //         the leaderboard.
     await Promise.all([...collections.values()].map(async (c) => {
@@ -480,6 +485,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       historyUpdated: (history as { updated: string | null }).updated,
       computedAt: new Date().toISOString(),
       cursors,
+      rates,
       // Diagnostics: the market cap column kept flickering and two rounds of
       // reasoning about why were wrong, so the answer is reported rather than
       // inferred.

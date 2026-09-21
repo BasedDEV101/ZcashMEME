@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { marketCap, toBigInt } from "../lib/activity.ts";
+import { marketCap, toBigInt, type Rates } from "../lib/activity.ts";
 
 export interface PlotPoint {
   t: number;
@@ -94,11 +94,13 @@ function stamper(from: number, to: number): (t: number) => string {
 export function MarketPlot({
   points,
   quoteMint,
+  rates,
   height = 212,
   caption,
 }: {
   points: PlotPoint[];
   quoteMint: string | null;
+  rates?: Rates;
   height?: number;
   caption: string;
 }) {
@@ -116,8 +118,8 @@ export function MarketPlot({
   const peak = series.reduce<Point | null>((a, b) => (a === null || b.n > a.n ? b : a), null);
   const trough = series.reduce<Point | null>((a, b) => (a === null || b.n < a.n ? b : a), null);
   const flat = peak !== null && trough !== null && peak.n === trough.n;
-  const high = peak ? marketCap(peak.raw, quoteMint) : null;
-  const low = trough ? marketCap(trough.raw, quoteMint) : null;
+  const high = peak ? marketCap(peak.raw, quoteMint, rates) : null;
+  const low = trough ? marketCap(trough.raw, quoteMint, rates) : null;
 
   // The gutter is exactly as wide as the widest figure it has to hold, which
   // a monospaced face lets us compute instead of guess.

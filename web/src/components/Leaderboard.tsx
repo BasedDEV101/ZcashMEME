@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { GuillocheBand } from "./Guilloche.tsx";
 import { SearchField } from "./Field.tsx";
-import { SOLSCAN, marketCap, short, toBigInt, tokens, when, type ActivityCollection } from "../lib/activity.ts";
+import {
+  SOLSCAN, marketCap, marketCapUsd, short, toBigInt, tokens, when,
+  type ActivityCollection, type Rates,
+} from "../lib/activity.ts";
 
 type Sort = "burns" | "marketCap" | "destroyed" | "newest" | "oldest";
 
@@ -39,11 +42,16 @@ const PAGE = 20;
 /** Missing or unparseable sorts last, rather than throwing mid-render. */
 const big = (v: unknown): bigint => toBigInt(v) ?? -1n;
 
-function order(a: ActivityCollection, b: ActivityCollection, by: Sort): number {
+function order(a: ActivityCollection, b: ActivityCollection, by: Sort, rates?: Rates): number {
   switch (by) {
     case "marketCap": {
-      const d = big(b.marketCapQuote) - big(a.marketCapQuote);
-      return d === 0n ? 0 : d > 0n ? 1 : -1;
+      // Ranked in dollars. Comparing the raw integers put a bigger ZEC coin
+      // below a smaller SOL one: different currencies, different decimals,
+      // not the same kind of number. A coin whose rate is unknown sorts last
+      // rather than being given an invented value.
+      const x = marketCapUsd(a.marketCapQuote, a.quoteMint, rates) ?? -1;
+      const y = marketCapUsd(b.marketCapQuote, b.quoteMint, rates) ?? -1;
+      return y - x;
     }
     case "destroyed": {
       const d = big(b.destroyedTokens) - big(a.destroyedTokens);
@@ -79,8 +87,9 @@ function matches(c: ActivityCollection, query: string): boolean {
  * and a page that prints all of them is one nobody reads to the end of — the
  * search field is how you reach a specific coin, not scrolling.
  */
-export function Leaderboard({ collections, loading, error, stale }: {
-  collections: ActivityCollection[]; loading: boolean; error: string | null; stale?: boolean;
+export function Leaderboard({ collections, loading, error, stale, rates }: {
+  collections: ActivityCollection[]; loading: boolean; error: string | null;
+  stale?: boolean; rates?: Rates;
 }) {
   const [by, setBy] = useState<Sort>("burns");
   const [query, setQuery] = useState("");
@@ -94,7 +103,7 @@ export function Leaderboard({ collections, loading, error, stale }: {
     .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))[0]?.mint;
 
   const found = collections.filter((c) => matches(c, query));
-  const ranked = [...found].sort((a, b) => order(a, b, by));
+  const ranked = [...found].sort((a, b) => order(a, b, by, rates));
   // A search shows everything it found: hiding matches behind "show more"
   // makes the field feel broken.
   const searching = query.trim().length > 0;
@@ -154,6 +163,7 @@ export function Leaderboard({ collections, loading, error, stale }: {
               collection={c}
               rank={searching ? null : i + 1}
               by={by}
+              rates={rates}
               first={c.mint === firstEntry}
             />
           ))}
@@ -185,8 +195,8 @@ export function Leaderboard({ collections, loading, error, stale }: {
   );
 }
 
-function Row({ collection: c, rank, by, first }: {
-  collection: ActivityCollection; rank: number | null; by: Sort; first?: boolean;
+function Row({ collection: c, rank, by, rates, first }: {
+  collection: ActivityCollection; rank: number | null; by: Sort; rates?: Rates; first?: boolean;
 }) {
   return (
     // Flex, not a fixed grid: at 390px a four-column grid squeezed the middle
@@ -234,7 +244,7 @@ function Row({ collection: c, rank, by, first }: {
 
       <div className="shrink-0 text-right">
         <p className="tnum font-display text-[1.05rem] leading-none text-engrave sm:text-[1.15rem]">
-          {headline(c, by)}
+          {headline(c, by, rates)}
         </p>
         <p className="mt-1 font-body text-[0.55rem] tracking-[0.12em] text-ink-soft uppercase sm:text-[0.58rem] sm:tracking-[0.14em]">
           {caption(c, by)}
@@ -244,8 +254,8 @@ function Row({ collection: c, rank, by, first }: {
   );
 }
 
-function headline(c: ActivityCollection, by: Sort): string {
-  if (by === "marketCap") return marketCap(c.marketCapQuote, c.quoteMint) ?? "—";
+function headline(c: ActivityCollection, by: Sort, rates?: Rates): string {
+  if (by === "marketCap") return marketCap(c.marketCapQuote, c.quoteMint, rates) ?? "—";
   if (by === "destroyed") return toBigInt(c.destroyedTokens) === null ? "—" : tokens(c.destroyedTokens);
   if (by === "newest" || by === "oldest") return when(c.launchedAt);
   return tokens(c.burnedTokens);

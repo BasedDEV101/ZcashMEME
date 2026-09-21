@@ -1,5 +1,5 @@
 import { GuillocheBand } from "./Guilloche.tsx";
-import { marketCap, tokens, when, type ActivityCollection } from "../lib/activity.ts";
+import { marketCap, tokens, when, type ActivityCollection, type Rates } from "../lib/activity.ts";
 
 const PUMP = "https://pump.fun/coin";
 
@@ -17,12 +17,13 @@ const PUMP = "https://pump.fun/coin";
  * nine times: the eye reads the repetition instead of the coins. The minimum
  * is the same for all of them and belongs in the line underneath, once.
  */
-export function LatestCoins({ collections, loading, error, limit = 8, onMore }: {
+export function LatestCoins({ collections, loading, error, limit = 8, onMore, rates }: {
   collections: ActivityCollection[];
   loading: boolean;
   error: string | null;
   limit?: number;
   onMore?: () => void;
+  rates?: Rates;
 }) {
   // The feed arrives ranked by burns; this view wants launch order.
   const newest = [...collections]
@@ -78,7 +79,7 @@ export function LatestCoins({ collections, loading, error, limit = 8, onMore }: 
                     <p className="mt-1 truncate text-[0.82rem] text-ink-soft">{c.name}</p>
                   )}
                   <p className="tnum mt-0.5 font-data text-[0.7rem] text-engrave-soft">
-                    {marketCap(c.marketCapQuote, c.quoteMint) ?? "—"}
+                    {marketCap(c.marketCapQuote, c.quoteMint, rates) ?? "—"}
                   </p>
                 </a>
               </li>

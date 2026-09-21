@@ -36,11 +36,15 @@ export interface ActivityBurn {
   reason?: string;
 }
 
+/** Dollars per unit of each quote currency, when the endpoint could read them. */
+export interface Rates { zec?: number; sol?: number; at?: string }
+
 export interface Activity {
   collections: ActivityCollection[];
   burns: ActivityBurn[];
   feeSol: number;
   historyUpdated: string | null;
+  rates?: Rates;
   /** When this was last rebuilt from chain. */
   computedAt?: string;
   /** True when an RPC failed and this is the last good answer instead. */
@@ -137,8 +141,47 @@ export function marketCapValue(raw: string | null | undefined, quoteMint: string
   return Number.isFinite(n) ? n : null;
 }
 
-/** A market cap in its own currency, at a readable number of digits. */
-export function marketCap(raw: string | null | undefined, quoteMint: string | null | undefined): string | null {
+/** A market cap in dollars, or null when the rate for its quote is unknown. */
+export function marketCapUsd(
+  raw: string | null | undefined,
+  quoteMint: string | null | undefined,
+  rates: Rates | undefined,
+): number | null {
+  const n = marketCapValue(raw, quoteMint);
+  if (n === null || !rates) return null;
+  const quote = QUOTES[quoteMint ?? ""] ?? QUOTES.So11111111111111111111111111111111111111112;
+  const rate = quote.symbol === "ZEC" ? rates.zec : rates.sol;
+  if (!rate || !Number.isFinite(rate)) return null;
+  const usd = n * rate;
+  return Number.isFinite(usd) ? usd : null;
+}
+
+/** $980, $150k, $1.2M — the form a market cap is actually read in. */
+export function money(usd: number | null): string | null {
+  if (usd === null || !Number.isFinite(usd)) return null;
+  const trim = (n: number) => (n >= 100 ? Math.round(n).toString() : n.toFixed(1).replace(/\.0$/, ""));
+  if (usd >= 1e9) return `$${trim(usd / 1e9)}B`;
+  if (usd >= 1e6) return `$${trim(usd / 1e6)}M`;
+  if (usd >= 1e3) return `$${trim(usd / 1e3)}k`;
+  if (usd >= 1) return `$${Math.round(usd)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
+/**
+ * What to print for a coin's market cap.
+ *
+ * Dollars, because "3,264 ZEC" asks the reader to know the ZEC price and do
+ * the arithmetic, and a ZEC cap cannot be compared with a SOL one at all.
+ * Falls back to the native unit rather than to nothing, so a failed rate
+ * fetch costs precision and not the whole column.
+ */
+export function marketCap(
+  raw: string | null | undefined,
+  quoteMint: string | null | undefined,
+  rates?: Rates,
+): string | null {
+  const usd = money(marketCapUsd(raw, quoteMint, rates));
+  if (usd) return usd;
   const n = marketCapValue(raw, quoteMint);
   if (n === null) return null;
   const quote = QUOTES[quoteMint ?? ""] ?? QUOTES.So11111111111111111111111111111111111111112;

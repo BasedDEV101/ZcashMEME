@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { GuillocheBand } from "./Guilloche.tsx";
 import { MarketPlot, type PlotPoint } from "./MarketPlot.tsx";
-import { marketCap, marketCapValue, toBigInt, type ActivityCollection } from "../lib/activity.ts";
+import { marketCap, marketCapUsd, marketCapValue, toBigInt, type ActivityCollection, type Rates } from "../lib/activity.ts";
 import { readings, record, type Reading } from "../lib/history.ts";
 
 /** A date as a document prints one. */
@@ -35,10 +35,11 @@ function movement(series: Reading[]): string | null {
  * the plate's own words rather than letting the line imply a past it does not
  * have.
  */
-export function MarketRecord({ collections, loading, error }: {
+export function MarketRecord({ collections, loading, error, rates }: {
   collections: ActivityCollection[];
   loading: boolean;
   error: string | null;
+  rates?: Rates;
 }) {
   const id = useId();
   const [chosen, setChosen] = useState<string | null>(null);
@@ -55,7 +56,13 @@ export function MarketRecord({ collections, loading, error }: {
     () =>
       collections
         .filter((c) => toBigInt(c.marketCapQuote) !== null)
-        .sort((a, b) => (marketCapValue(b.marketCapQuote, b.quoteMint) ?? 0) - (marketCapValue(a.marketCapQuote, a.quoteMint) ?? 0)),
+        // Ordered in dollars, like the leaderboard: a raw-integer sort puts
+        // a bigger ZEC coin below a smaller SOL one.
+        .sort((a, b) =>
+          (marketCapUsd(b.marketCapQuote, b.quoteMint, rates)
+            ?? marketCapValue(b.marketCapQuote, b.quoteMint) ?? 0)
+          - (marketCapUsd(a.marketCapQuote, a.quoteMint, rates)
+            ?? marketCapValue(a.marketCapQuote, a.quoteMint) ?? 0)),
     [collections],
   );
 
@@ -75,7 +82,7 @@ export function MarketRecord({ collections, loading, error }: {
   const series = readings(store, coin?.mint);
   const points: PlotPoint[] = series.map((r) => ({ t: r.t, value: r.value }));
 
-  const latest = coin ? marketCap(coin.marketCapQuote, coin.quoteMint) : null;
+  const latest = coin ? marketCap(coin.marketCapQuote, coin.quoteMint, rates) : null;
   const caps = series.map((r) => toBigInt(r.value) ?? 0n);
   const highRaw = caps.length ? caps.reduce((a, b) => (b > a ? b : a)).toString() : null;
   const lowRaw = caps.length ? caps.reduce((a, b) => (b < a ? b : a)).toString() : null;
@@ -83,7 +90,7 @@ export function MarketRecord({ collections, loading, error }: {
 
   const caption = coin
     ? `${coin.symbol} market cap, ${series.length} reading${series.length === 1 ? "" : "s"} taken in this browser` +
-      (series.length ? `, from ${marketCap(lowRaw, coin.quoteMint) ?? "—"} to ${marketCap(highRaw, coin.quoteMint) ?? "—"}. Latest ${latest ?? "—"}.` : ".")
+      (series.length ? `, from ${marketCap(lowRaw, coin.quoteMint, rates) ?? "—"} to ${marketCap(highRaw, coin.quoteMint, rates) ?? "—"}. Latest ${latest ?? "—"}.` : ".")
     : "No coin selected.";
 
   return (
@@ -131,7 +138,8 @@ export function MarketRecord({ collections, loading, error }: {
               </div>
 
               <div className="mt-7">
-                <MarketPlot points={points} quoteMint={coin.quoteMint} caption={caption} />
+                <MarketPlot
+          rates={rates} points={points} quoteMint={coin.quoteMint} caption={caption} />
               </div>
 
               {series.length < 2 && (
@@ -148,8 +156,8 @@ export function MarketRecord({ collections, loading, error }: {
                   copies of one figure. They appear once there is a range. */}
               {series.length > 1 && (
                 <>
-                  <Entry label="Highest seen" value={marketCap(highRaw, coin.quoteMint) ?? "—"} />
-                  <Entry label="Lowest seen" value={marketCap(lowRaw, coin.quoteMint) ?? "—"} />
+                  <Entry label="Highest seen" value={marketCap(highRaw, coin.quoteMint, rates) ?? "—"} />
+                  <Entry label="Lowest seen" value={marketCap(lowRaw, coin.quoteMint, rates) ?? "—"} />
                 </>
               )}
               <Entry label="Readings" value={tally(series)} />

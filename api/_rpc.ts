@@ -442,3 +442,34 @@ export async function readMints(r: SolanaRpc, mints: string[]): Promise<Map<stri
   }
   return out;
 }
+
+/** Dollars per unit of the quote currencies coins here trade against. */
+export interface Rates { zec?: number; sol?: number; at?: string }
+
+/**
+ * What ZEC and SOL are worth, so a market cap can be read as money.
+ *
+ * "3,264 ZEC" asks the reader to know the ZEC price and do the arithmetic,
+ * and it cannot be compared with a cap quoted in SOL at all -- sorting by it
+ * ranked a bigger ZEC coin below a smaller SOL one. A dollar figure is the
+ * only form in which the two are the same kind of number.
+ *
+ * One call per rebuild. A failure returns nothing rather than a guess, and
+ * the caller keeps the rates it already had.
+ */
+export async function readRates(): Promise<Rates | null> {
+  try {
+    const res = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=zcash,solana&vs_currencies=usd",
+      { signal: AbortSignal.timeout(6000) },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as { zcash?: { usd?: number }; solana?: { usd?: number } };
+    const zec = body.zcash?.usd;
+    const sol = body.solana?.usd;
+    if (!Number.isFinite(zec) || !Number.isFinite(sol)) return null;
+    return { zec, sol, at: new Date().toISOString() };
+  } catch {
+    return null;
+  }
+}

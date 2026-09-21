@@ -40,6 +40,7 @@ function Page() {
   const error = activity.status === "error" ? activity.message : null;
   const data = activity.status === "ready" ? activity.data : null;
   const stale = data?.stale ?? false;
+  const rates = data?.rates;
 
   // The hero used to print one certificate -- 1,500,000 of a single coin --
   // which read as the pad's whole output rather than as the one example it
@@ -96,13 +97,13 @@ function Page() {
             </p>
           </section>
           <Boundary what="launch list">
-            <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={8} />
+            <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={8} rates={rates} />
           </Boundary>
           <Boundary what="market record">
-            <MarketRecord collections={data?.collections ?? []} loading={loading} error={error} />
+            <MarketRecord collections={data?.collections ?? []} loading={loading} error={error} rates={rates} />
           </Boundary>
           <Boundary what="leaderboard">
-            <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} />
+            <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} rates={rates} />
           </Boundary>
           <Boundary what="burn feed">
             <Burns burns={data?.burns ?? []} loading={loading} error={error} stale={stale} />
@@ -176,6 +177,7 @@ function Page() {
               collections={data?.collections ?? []}
               loading={loading}
               error={error}
+              rates={rates}
               onMore={() => go("/leaderboard")}
             />
           </Boundary>
@@ -264,6 +266,7 @@ function Page() {
             collections={data?.collections ?? []}
             loading={loading}
             error={error}
+            rates={rates}
             onMore={() => go("/leaderboard")}
           />
         </Boundary>
