@@ -437,17 +437,25 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // Compared against what the PREVIOUS reading would list under today's
     // rules, not its raw length: otherwise tightening the rules looks like
     // data loss and blocks every save from then on.
-    const previous = (Array.isArray(cached?.collections) ? (cached.collections as Collection[]) : [])
-      .filter((c) => c?.mint && eligible(c)).length;
+    const before = (Array.isArray(cached?.collections) ? (cached.collections as Collection[]) : [])
+      .filter((c) => c?.mint && eligible(c));
+    const previous = before.length;
+    // Prices are held to the same rule as coins. A rebuild whose pricing was
+    // refused still lists every coin, so the count guard let it save over one
+    // that had priced forty of them -- the column flickered 0, 40, 0, 40 and
+    // never accumulated.
+    const pricedBefore = before.filter((c) => c.marketCapQuote).length;
+    const pricedNow = ranked.filter((c) => c.marketCapQuote).length;
+    const worse = ranked.length < previous || pricedNow < pricedBefore;
     // A rebuild that found fewer coins than the last complete reading is a
     // worse answer, not a newer one. Refusing to SAVE it was not enough: it
     // was still served for that request and cached at the edge for two
     // minutes, which is what the leaderboard's 69 -> 60 -> 1 flicker actually
     // was. When we know the stored reading is better, that is the one to send.
-    if (snapshot.readable && cached && ranked.length < previous) {
+    if (snapshot.readable && cached && worse) {
       return json(res, 200, { ...cached, stale: true }, 60);
     }
-    if (snapshot.readable && mintsRead && ranked.length >= previous && ranked.length > 0) {
+    if (snapshot.readable && mintsRead && !worse && ranked.length > 0) {
       await saveSnapshot(body);
     }
     return json(res, 200, body, 120);
