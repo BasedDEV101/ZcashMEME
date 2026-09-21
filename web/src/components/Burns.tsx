@@ -1,5 +1,5 @@
 import { GuillocheBand } from "./Guilloche.tsx";
-import { SOLSCAN, short, tokens, when, type ActivityBurn } from "../lib/activity.ts";
+import { SOLSCAN, short, toBigInt, tokens, when, type ActivityBurn } from "../lib/activity.ts";
 
 /**
  * Every burn against a collection on the pad, refusals included.
@@ -14,7 +14,7 @@ export function Burns({ burns, loading, error, stale, limit, onMore }: {
 }) {
   const shown = limit ? burns.slice(0, limit) : burns;
   const valid = burns.filter((b) => b.ok);
-  const destroyed = valid.reduce((n, b) => n + BigInt(b.amount ?? "0"), 0n);
+  const destroyed = valid.reduce((n, b) => n + (toBigInt(b.amount) ?? 0n), 0n);
 
   return (
     <section id="burns" className="paper-lift scroll-mt-6 bg-paper px-6 py-9 sm:px-10 sm:py-12">

@@ -11,6 +11,7 @@ import { Leaderboard } from "./components/Leaderboard.tsx";
 import { Burns } from "./components/Burns.tsx";
 import { LatestCoins } from "./components/LatestCoins.tsx";
 import { NewVersion } from "./components/NewVersion.tsx";
+import { Boundary } from "./components/Boundary.tsx";
 import { useActivity } from "./lib/activity.ts";
 
 export default function App() {
@@ -78,9 +79,15 @@ function Page() {
               listed; everything here was made on the pad.
             </p>
           </section>
-          <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={8} />
-          <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} />
-          <Burns burns={data?.burns ?? []} loading={loading} error={error} stale={stale} />
+          <Boundary what="launch list">
+            <LatestCoins collections={data?.collections ?? []} loading={loading} error={error} limit={8} />
+          </Boundary>
+          <Boundary what="leaderboard">
+            <Leaderboard collections={data?.collections ?? []} loading={loading} error={error} stale={stale} />
+          </Boundary>
+          <Boundary what="burn feed">
+            <Burns burns={data?.burns ?? []} loading={loading} error={error} stale={stale} />
+          </Boundary>
           <Footer />
         </main>
       </div>
@@ -106,7 +113,7 @@ function Page() {
               the same mechanism {CONFIG.ticker} uses, with no special treatment for ours.
             </p>
             <div className="mt-8 grid gap-10 lg:grid-cols-[1.15fr_1fr]">
-              <CreateCoinPanel />
+              <Boundary what="launch form"><CreateCoinPanel /></Boundary>
               <aside className="space-y-6 border-t border-engrave/20 pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
                 <h3 className="font-display text-xl text-engrave">How it works</h3>
                 <Warning title="One signature does everything">
@@ -145,13 +152,17 @@ function Page() {
             </div>
           </section>
 
-          <LatestCoins
-            collections={data?.collections ?? []}
-            loading={loading}
-            error={error}
-            onMore={() => go("/leaderboard")}
-          />
-          <Registry collections={collections} updated={updated} />
+          <Boundary what="launch list">
+            <LatestCoins
+              collections={data?.collections ?? []}
+              loading={loading}
+              error={error}
+              onMore={() => go("/leaderboard")}
+            />
+          </Boundary>
+          <Boundary what="register">
+            <Registry collections={collections} updated={updated} />
+          </Boundary>
           <Footer />
         </main>
       </div>
@@ -200,7 +211,7 @@ function Page() {
                 <GuillocheBand className="h-5 w-full" />
               </div>
               <div className="mt-8">
-                <BurnPanel />
+                <Boundary what="burn form"><BurnPanel /></Boundary>
               </div>
             </div>
             <aside className="space-y-6 border-t border-engrave/20 pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
@@ -224,21 +235,25 @@ function Page() {
           </div>
         </section>
 
-        <LatestCoins
-          collections={data?.collections ?? []}
-          loading={loading}
-          error={error}
-          onMore={() => go("/leaderboard")}
-        />
+        <Boundary what="launch list">
+          <LatestCoins
+            collections={data?.collections ?? []}
+            loading={loading}
+            error={error}
+            onMore={() => go("/leaderboard")}
+          />
+        </Boundary>
 
-        <Burns
-          burns={data?.burns ?? []}
-          loading={loading}
-          error={error}
-          stale={stale}
-          limit={8}
-          onMore={() => go("/leaderboard")}
-        />
+        <Boundary what="burn feed">
+          <Burns
+            burns={data?.burns ?? []}
+            loading={loading}
+            error={error}
+            stale={stale}
+            limit={8}
+            onMore={() => go("/leaderboard")}
+          />
+        </Boundary>
 
         <WhyAStamp />
 

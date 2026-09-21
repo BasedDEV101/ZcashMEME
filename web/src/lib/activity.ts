@@ -73,12 +73,29 @@ export function useActivity(): State {
   return state;
 }
 
-export const short = (s: string, n = 4): string => `${s.slice(0, n)}…${s.slice(-n)}`;
+/**
+ * A whole number from whatever the endpoint sent, or null.
+ *
+ * BigInt("") and BigInt(undefined) both throw, and a throw during render
+ * unmounts the whole app -- the leaderboard went blank on any sort or search
+ * because one collection was missing a field. The snapshot can hold rows
+ * written by an older build, so a missing field is a normal thing to meet
+ * rather than an impossible one.
+ */
+export function toBigInt(v: unknown): bigint | null {
+  if (typeof v === "bigint") return v;
+  if (typeof v === "number") return Number.isFinite(v) ? BigInt(Math.trunc(v)) : null;
+  if (typeof v === "string" && /^-?\d+$/.test(v.trim())) return BigInt(v.trim());
+  return null;
+}
 
-export const tokens = (whole: string): string => BigInt(whole || "0").toLocaleString("en-US");
+export const short = (s: string, n = 4): string =>
+  typeof s === "string" && s.length > n * 2 ? `${s.slice(0, n)}…${s.slice(-n)}` : String(s ?? "");
 
-export function when(unix: number | null): string {
-  if (!unix) return "—";
+export const tokens = (whole: unknown): string => (toBigInt(whole) ?? 0n).toLocaleString("en-US");
+
+export function when(unix: number | null | undefined): string {
+  if (typeof unix !== "number" || !Number.isFinite(unix) || unix <= 0) return "—";
   const mins = Math.floor((Date.now() / 1000 - unix) / 60);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -103,12 +120,13 @@ const QUOTES: Record<string, { symbol: string; decimals: number }> = {
 };
 
 /** A market cap in its own currency, at a readable number of digits. */
-export function marketCap(raw: string | null, quoteMint: string | null): string | null {
-  if (raw === null) return null;
+export function marketCap(raw: string | null | undefined, quoteMint: string | null | undefined): string | null {
+  const value = toBigInt(raw);
+  if (value === null) return null;
   // An unknown quote falls back to SOL's scale rather than to nothing: every
   // coin priced before ZEC pairing is SOL-quoted and carries no quote field.
   const quote = QUOTES[quoteMint ?? ""] ?? QUOTES.So11111111111111111111111111111111111111112;
-  const n = Number(BigInt(raw)) / 10 ** quote.decimals;
+  const n = Number(value) / 10 ** quote.decimals;
   const digits = n >= 1000 ? 0 : n >= 10 ? 1 : n >= 0.01 ? 2 : 4;
   return `${n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote.symbol}`;
 }

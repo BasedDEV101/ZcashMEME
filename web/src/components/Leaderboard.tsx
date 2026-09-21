@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { GuillocheBand } from "./Guilloche.tsx";
 import { SearchField } from "./Field.tsx";
-import { SOLSCAN, marketCap, short, tokens, when, type ActivityCollection } from "../lib/activity.ts";
+import { SOLSCAN, marketCap, short, toBigInt, tokens, when, type ActivityCollection } from "../lib/activity.ts";
 
 type Sort = "burns" | "marketCap" | "destroyed" | "newest" | "oldest";
 
@@ -22,7 +22,7 @@ const SORTS: { key: Sort; label: string; blurb: string }[] = [
  * either way round rather than claiming one end of it.
  */
 const place = (c: ActivityCollection): number | null =>
-  c.slot && c.slot > 0 ? c.slot : null;
+  typeof c.slot === "number" && c.slot > 0 ? c.slot : null;
 
 function bySlot(a: ActivityCollection, b: ActivityCollection, direction: 1 | -1): number {
   const x = place(a);
@@ -36,7 +36,8 @@ function bySlot(a: ActivityCollection, b: ActivityCollection, direction: 1 | -1)
 /** Rows shown before asking. The register runs to hundreds; the screen does not. */
 const PAGE = 20;
 
-const big = (v: string | null): bigint => (v === null ? -1n : BigInt(v));
+/** Missing or unparseable sorts last, rather than throwing mid-render. */
+const big = (v: unknown): bigint => toBigInt(v) ?? -1n;
 
 function order(a: ActivityCollection, b: ActivityCollection, by: Sort): number {
   switch (by) {
@@ -53,7 +54,7 @@ function order(a: ActivityCollection, b: ActivityCollection, by: Sort): number {
     case "oldest":
       return bySlot(a, b, 1);
     default: {
-      const d = BigInt(b.burnedTokens) - BigInt(a.burnedTokens);
+      const d = (toBigInt(b.burnedTokens) ?? 0n) - (toBigInt(a.burnedTokens) ?? 0n);
       return d === 0n ? (b.launchedAt ?? 0) - (a.launchedAt ?? 0) : d > 0n ? 1 : -1;
     }
   }
@@ -63,11 +64,8 @@ function order(a: ActivityCollection, b: ActivityCollection, by: Sort): number {
 function matches(c: ActivityCollection, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return (
-    c.symbol.toLowerCase().includes(q) ||
-    (c.name ?? "").toLowerCase().includes(q) ||
-    c.mint.toLowerCase().includes(q)
-  );
+  const has = (v: unknown) => typeof v === "string" && v.toLowerCase().includes(q);
+  return has(c.symbol) || has(c.name) || has(c.mint);
 }
 
 /**
@@ -92,7 +90,7 @@ export function Leaderboard({ collections, loading, error, stale }: {
   // named: whichever listed coin was registered at the lowest slot is the one
   // that opened it, and stays so as coins are added.
   const firstEntry = collections
-    .filter((c) => (c.slot ?? 0) > 0)
+    .filter((c) => typeof c.slot === "number" && c.slot > 0)
     .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))[0]?.mint;
 
   const found = collections.filter((c) => matches(c, query));
@@ -202,7 +200,7 @@ function Row({ collection: c, rank, by, first }: {
         <img src={c.image} alt="" loading="lazy" className="h-10 w-10 shrink-0 border border-engrave/25 object-cover" />
       ) : (
         <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-engrave/25 font-display text-[0.8rem] text-engrave/55">
-          {c.symbol.slice(0, 2)}
+          {String(c.symbol ?? "?").slice(0, 2)}
         </span>
       )}
 
@@ -248,7 +246,7 @@ function Row({ collection: c, rank, by, first }: {
 
 function headline(c: ActivityCollection, by: Sort): string {
   if (by === "marketCap") return marketCap(c.marketCapQuote, c.quoteMint) ?? "—";
-  if (by === "destroyed") return c.destroyedTokens === null ? "—" : tokens(c.destroyedTokens);
+  if (by === "destroyed") return toBigInt(c.destroyedTokens) === null ? "—" : tokens(c.destroyedTokens);
   if (by === "newest" || by === "oldest") return when(c.launchedAt);
   return tokens(c.burnedTokens);
 }

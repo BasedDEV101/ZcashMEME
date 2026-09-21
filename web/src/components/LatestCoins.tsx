@@ -1,5 +1,5 @@
 import { GuillocheBand } from "./Guilloche.tsx";
-import { marketCap, when, type ActivityCollection } from "../lib/activity.ts";
+import { marketCap, tokens, when, type ActivityCollection } from "../lib/activity.ts";
 
 const PUMP = "https://pump.fun/coin";
 
@@ -88,7 +88,7 @@ export function LatestCoins({ collections, loading, error, limit = 8, onMore }: 
           <p className="mt-9 max-w-[64ch] border-t border-engrave/20 pt-5 text-sm text-ink-soft">
             Every one of these was created here, and its collection registered on Zcash in the same
             signature. Holders burn at least{" "}
-            {Number(newest[0].minWholeTokens).toLocaleString("en-US")} tokens for a certificate.
+            {tokens(newest[0].minWholeTokens)} tokens for a certificate.
           </p>
         </>
       )}
@@ -117,7 +117,7 @@ function Plate({ collection }: { collection: ActivityCollection }) {
   return (
     <div className="flex aspect-square w-full items-center justify-center border border-engrave/30 bg-paper-deep">
       <span className="font-display text-[1.6rem] text-engrave/45">
-        {collection.symbol.slice(0, 3)}
+        {String(collection.symbol ?? "?").slice(0, 3)}
       </span>
     </div>
   );
