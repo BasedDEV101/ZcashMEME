@@ -253,6 +253,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // pass; the ones already seeded are untouched, so the list only ever
     // grows and the next rebuild picks up what this one missed.
     let partial = false;
+    let launchDiscoveryComplete = true;
     const eligible = (c: Collection) =>
       c.mint === FLAGSHIP.mint || (c.createdHere === true && (c.slot ?? 0) >= REGISTER_OPENS_AT_SLOT);
 
@@ -317,6 +318,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
           // pruned history -- must not wedge discovery forever. Drop it and
           // this address gets a full listing next time.
           partial = true;
+          launchDiscoveryComplete = false;
           delete cursors[address];
           break;
         }
@@ -343,13 +345,14 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       try {
         const raw = await r.getTransaction(s.signature, "finalized");
         if (raw) launchTxs.set(s.signature, raw);
-        else partial = true;
+        else { partial = true; launchDiscoveryComplete = false; }
       } catch {
         // A launch we could not read this time is missing from the list, not
         // wrong in it: the page still renders, but this rebuild is incomplete
         // and must not be saved over a complete one. Coins vanished from the
         // leaderboard between refreshes until this counted as partial.
         partial = true;
+        launchDiscoveryComplete = false;
       }
     });
 
@@ -630,7 +633,11 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
       historyUpdated: (history as { updated: string | null }).updated,
       computedAt: new Date().toISOString(),
-      launchPlatformSchema: LAUNCH_PLATFORM_SCHEMA,
+      // Do not mark the one-time replay complete if an RPC failure may have
+      // hidden a launch. Without the marker, the next request retries it.
+      launchPlatformSchema: launchDiscoveryComplete
+        ? LAUNCH_PLATFORM_SCHEMA
+        : cached?.launchPlatformSchema,
       cursors,
       rates,
       currentMarketCapUsd: currentMarketCapUsd ?? cached?.currentMarketCapUsd ?? null,
@@ -667,13 +674,24 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // was still served for that request and cached at the edge for two
     // minutes, which is what the leaderboard's 69 -> 60 -> 1 flicker actually
     // was. When we know the stored reading is better, that is the one to send.
-    if (snapshot.readable && cached && worse) {
-      return json(res, 200, { ...cached, stale: true }, 60);
-    }
     // Serve exactly what gets stored. Saving the merged reading but returning
     // the raw one meant a rebuild that priced a single coin still showed a
     // single coin priced, however much was already known.
     const merged = snapshot.readable ? await mergedWithLatest(body) : body;
+    // A schema replay intentionally changes old rows and may add launches that
+    // the previous parser rejected. `merged` already preserves every newer
+    // price from the old snapshot, so the ordinary price-count guard must not
+    // throw the migration away after it succeeded.
+    const platformMigrationReady = needsPlatformMigration
+      && launchDiscoveryComplete
+      && ranked.length >= previous;
+    if (platformMigrationReady && snapshot.readable && mintsRead) {
+      await saveSnapshot(merged);
+      return json(res, 200, merged, 120);
+    }
+    if (snapshot.readable && cached && worse) {
+      return json(res, 200, { ...cached, stale: true }, 60);
+    }
     if (snapshot.readable && mintsRead && !worse && ranked.length > 0) {
       await saveSnapshot(merged);
     }
