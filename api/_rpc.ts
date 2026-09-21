@@ -309,12 +309,12 @@ export async function readCurves(
 
   const fetchAll = async (addresses: string[]) => {
     const acc: ({ data: [string, string] } | null)[] = [];
-    // 100 is getMultipleAccounts' own limit. The 50 here was sized for
-    // jsonParsed responses; a base64 account is small enough to take the max,
-    // which halves the calls a rebuild spends on a growing pad.
-    for (let i = 0; i < addresses.length; i += 100) {
+    // 50, not the protocol's 100: raising it to the maximum made the public
+    // endpoint answer 403 and every market cap went blank. The saving was one
+    // or two calls a rebuild; the cost was the whole column.
+    for (let i = 0; i < addresses.length; i += 50) {
       const res = await r.call<{ value: ({ data: [string, string] } | null)[] }>(
-        "getMultipleAccounts", [addresses.slice(i, i + 100), { encoding: "base64", commitment: "finalized" }]);
+        "getMultipleAccounts", [addresses.slice(i, i + 50), { encoding: "base64", commitment: "finalized" }]);
       acc.push(...res.value);
     }
     return acc;
@@ -397,8 +397,9 @@ function decodeMint(data: Buffer): { decimals: number; supply: string } | null {
  */
 export async function readMints(r: SolanaRpc, mints: string[]): Promise<Map<string, MintInfo>> {
   const out = new Map<string, MintInfo>();
-  for (let i = 0; i < mints.length; i += 100) {
-    const slice = mints.slice(i, i + 100);
+  // 50 for the same reason as above: 100 is refused by the public endpoint.
+  for (let i = 0; i < mints.length; i += 50) {
+    const slice = mints.slice(i, i + 50);
     const res = await r.call<{ value: ({ owner: string; data: [string, string] } | null)[] }>(
       "getMultipleAccounts", [slice, { encoding: "base64", commitment: "finalized" }]);
     res.value.forEach((acc, j) => {
