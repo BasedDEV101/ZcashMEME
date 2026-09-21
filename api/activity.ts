@@ -141,21 +141,41 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
     // carries a `before` cursor, and when a call fails over to another
     // provider that provider may never have heard of that signature --
     // "Transaction ... not found" -- which used to take down the whole page.
+    // Only what is new since the last reading.
+    //
+    // Re-listing both fee addresses in full cost up to twenty calls of a
+    // thousand signatures each, every three minutes, to rediscover launches
+    // already seeded above. That spent the whole RPC budget before anything
+    // else ran, which is why market caps came back 403. With a cursor it is
+    // one or two calls.
+    const priorCursors = (cached?.cursors ?? {}) as Record<string, string>;
+    const cursors: Record<string, string> = { ...priorCursors };
+
     const sigs = [];
     for (const address of FEE_ADDRESSES) {
+      const until = priorCursors[address];
       let before: string | undefined;
+      let newest: string | undefined;
       for (let page = 0; page < FEE_PAGES; page++) {
         let batch;
         try {
-          batch = await r.getSignaturesForAddress(address, { before, limit: 1000 });
+          batch = await r.getSignaturesForAddress(address, { before, until, limit: 1000 });
         } catch {
+          // A cursor the endpoint has never heard of -- a different provider,
+          // pruned history -- must not wedge discovery forever. Drop it and
+          // this address gets a full listing next time.
           partial = true;
+          delete cursors[address];
           break;
         }
+        if (!newest && batch.length > 0) newest = batch[0].signature;
         sigs.push(...batch);
         if (batch.length < 1000) break;
         before = batch[batch.length - 1].signature;
+        // Without a cursor this is a first read; do not walk all of history.
+        if (!until && page >= 2) { partial = true; break; }
       }
+      if (newest) cursors[address] = newest;
     }
     sigs.sort((a, b) => b.slot - a.slot);
 
@@ -401,6 +421,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       feeSol: Number(LAUNCH_FEE_LAMPORTS) / 1e9,
       historyUpdated: (history as { updated: string | null }).updated,
       computedAt: new Date().toISOString(),
+      cursors,
       priced: [...collections.values()].filter((c) => c.marketCapQuote).length,
       priceable: priceable.length,
       priceError,
